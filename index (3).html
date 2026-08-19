@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Final Bruh</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #f0f0f0; min-height: 100vh; }
+  .app { max-width: 680px; margin: 0 auto; padding: 1.25rem 1rem 4rem; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #555; margin-bottom: 1.5rem; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid #2a2a2a; margin-bottom: 1.5rem; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { font-size: 13px; padding: 7px 16px; border: none; background: none; cursor: pointer; color: #888; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; font-family: inherit; font-weight: 500; transition: color 0.15s; }
+  .tab.active { color: #f0f0f0; border-bottom-color: #f0f0f0; }
+  .section { display: none; }
+  .section.active { display: block; }
+  /* Queue cards */
+  .queue-grid { display: flex; flex-direction: column; gap: 10px; }
+  .q-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 1rem 1.1rem; display: flex; align-items: center; gap: 12px; }
+  .q-cat { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #555; min-width: 80px; }
+  .q-body { flex: 1; min-width: 0; }
+  .q-title { font-size: 15px; font-weight: 600; color: #f0f0f0; line-height: 1.3; }
+  .q-count { font-size: 11px; color: #444; margin-top: 3px; }
+  .btn-done { font-size: 12px; background: transparent; border: 1px solid #2a2a2a; color: #666; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.15s; flex-shrink: 0; }
+  .btn-done:hover { border-color: #27ae60; color: #2ecc71; }
+  /* Confirm overlay */
+  .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 1rem; }
+  .confirm-box { background: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 14px; padding: 1.5rem; max-width: 320px; width: 100%; }
+  .confirm-box h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+  .confirm-box p { font-size: 14px; color: #aaa; margin-bottom: 1.25rem; line-height: 1.5; }
+  .confirm-actions { display: flex; gap: 8px; }
+  .confirm-actions button { flex: 1; padding: 10px; border-radius: 8px; font-size: 14px; font-family: inherit; cursor: pointer; font-weight: 600; border: none; }
+  .btn-cancel { background: #2a2a2a; color: #f0f0f0; }
+  .btn-confirm { background: #2ecc71; color: #0f0f0f; }
+  /* Admin */
+  .admin-section { margin-bottom: 2rem; }
+  .admin-section h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #666; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #2a2a2a; display: flex; justify-content: space-between; align-items: center; }
+  .admin-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #1a1a1a; border-radius: 8px; margin-bottom: 4px; }
+  .admin-pos { font-size: 11px; color: #444; min-width: 24px; text-align: right; flex-shrink: 0; }
+  .admin-title { flex: 1; font-size: 13px; color: #ccc; }
+  .admin-del { background: none; border: none; color: #3a3a3a; cursor: pointer; font-size: 16px; padding: 0 2px; transition: color 0.15s; flex-shrink: 0; }
+  .admin-del:hover { color: #c0392b; }
+  .add-item-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .add-item-row input, .add-item-row select { background: #1a1a1a; border: 1px solid #2e2e2e; border-radius: 8px; color: #f0f0f0; font-family: inherit; font-size: 13px; padding: 8px 10px; -webkit-appearance: none; }
+  .add-item-row input { flex: 1; min-width: 150px; }
+  .add-item-row input:focus, .add-item-row select:focus { outline: none; border-color: #555; }
+  .btn-add { font-size: 13px; background: #2a2a2a; border: none; color: #f0f0f0; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .btn-add:hover { background: #3a3a3a; }
+  .admin-cat-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .admin-cat-row input { flex: 1; background: #1a1a1a; border: 1px solid #2e2e2e; border-radius: 8px; color: #f0f0f0; font-family: inherit; font-size: 13px; padding: 8px 10px; }
+  .admin-cat-row input:focus { outline: none; border-color: #555; }
+  .admin-msg { font-size: 12px; color: #2ecc71; margin-top: 6px; min-height: 16px; }
+  /* Login */
+  .login-screen { position: fixed; inset: 0; background: #0f0f0f; display: flex; align-items: center; justify-content: center; z-index: 99; padding: 1rem; }
+  .login-box { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 14px; }
+  .login-box h2 { font-size: 20px; font-weight: 700; }
+  .login-box input { background: #1a1a1a; border: 1px solid #2e2e2e; border-radius: 8px; color: #f0f0f0; font-family: inherit; font-size: 15px; padding: 10px 12px; -webkit-appearance: none; }
+  .login-box input:focus { outline: none; border-color: #555; }
+  .btn-unlock { background: #f0f0f0; color: #0f0f0f; border: none; border-radius: 8px; padding: 11px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .login-error { font-size: 13px; color: #e74c3c; min-height: 18px; }
+  .loading-screen { position: fixed; inset: 0; background: #0f0f0f; display: flex; align-items: center; justify-content: center; z-index: 100; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner { width: 24px; height: 24px; border: 2px solid #2a2a2a; border-top-color: #f0f0f0; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  .empty { text-align: center; padding: 2rem; color: #444; font-size: 14px; }
+  .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: #555; display: inline-block; margin-left: 6px; vertical-align: middle; transition: background 0.3s; }
+  .sync-dot.syncing { background: #f5a623; }
+  .sync-dot.ok { background: #2ecc71; }
+  .sync-dot.error { background: #e74c3c; }
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="login-screen" style="display:none;">
+  <div class="login-box">
+    <h2>The Final Bruh</h2>
+    <input type="password" id="login-pw" placeholder="Password" onkeydown="if(event.key==='Enter')checkPw()" />
+    <button class="btn-unlock" onclick="checkPw()">Unlock</button>
+    <div class="login-error" id="login-err"></div>
+  </div>
+</div>
+
+<div class="loading-screen" id="loading-screen">
+  <div class="spinner"></div>
+</div>
+
+<div class="confirm-overlay" id="confirm-overlay" style="display:none;">
+  <div class="confirm-box">
+    <h3 id="confirm-title">Mark as done?</h3>
+    <p id="confirm-msg"></p>
+    <div class="confirm-actions">
+      <button class="btn-cancel" onclick="closeConfirm()">Cancel</button>
+      <button class="btn-confirm" id="confirm-ok">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="app" id="main-app" style="display:none;">
+  <h1>The Final Bruh <span class="sync-dot" id="sync-dot"></span></h1>
+  <p class="subtitle">What's next.</p>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('queue')">Queue</button>
+    <button class="tab" onclick="switchTab('admin')">Admin</button>
+  </div>
+
+  <div id="tab-queue" class="section active">
+    <div class="queue-grid" id="queue-grid"></div>
+  </div>
+
+  <div id="tab-admin" class="section">
+    <div class="admin-section">
+      <h3>Categories</h3>
+      <div id="cat-list"></div>
+      <div class="admin-cat-row">
+        <input type="text" id="new-cat-input" placeholder="New category name..." />
+        <button class="btn-add" onclick="addCategory()">Add</button>
+      </div>
+      <div class="admin-msg" id="cat-msg"></div>
+    </div>
+    <div id="admin-lists"></div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://phrmkxxcfdesollankvh.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBocm1reHhjZmRlc29sbGFua3ZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MzEwNDEsImV4cCI6MjA5MjMwNzA0MX0.V5631_Ex9Ds6OQNSKlmR8BqfdYM_KG8RVFI2WULrFf0';
+const API = `${SUPABASE_URL}/rest/v1/final_bruh`;
+const HEADERS = {'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`};
+
+const DEFAULT_CATEGORIES = ["Book", "Ultimate", "DC", "X-Men", "Marvel", "Vertigo", "Indie", "Jack Kirby", "Ghost Machine", "Movie", "TV Show"];
+const DEFAULT_ITEMS = [{"id": "BOO_000", "category": "Book", "title": "The Butcher's Masquerade", "position": 0}, {"id": "BOO_001", "category": "Book", "title": "The Eye of The Bedlam Bride", "position": 1}, {"id": "BOO_002", "category": "Book", "title": "This Inevitable Ruin", "position": 2}, {"id": "BOO_003", "category": "Book", "title": "A Parade of Horribles", "position": 3}, {"id": "BOO_004", "category": "Book", "title": "Frank Miller", "position": 4}, {"id": "BOO_005", "category": "Book", "title": "Tales To Astonish", "position": 5}, {"id": "ULT_000", "category": "Ultimate", "title": "Ultimate Black Panther Vol 1", "position": 0}, {"id": "ULT_001", "category": "Ultimate", "title": "Ultimate X-Men Vol 1", "position": 1}, {"id": "ULT_002", "category": "Ultimate", "title": "Ultimate Spider-Man Vol 2", "position": 2}, {"id": "ULT_003", "category": "Ultimate", "title": "Ultimate Black Panther Vol 2", "position": 3}, {"id": "ULT_004", "category": "Ultimate", "title": "Ultimate X-Men Vol 2", "position": 4}, {"id": "ULT_005", "category": "Ultimate", "title": "Ultimates Vol 2", "position": 5}, {"id": "ULT_006", "category": "Ultimate", "title": "Ultimate Wolverine Vol 1", "position": 6}, {"id": "ULT_007", "category": "Ultimate", "title": "Ultimate Spider-Man Vol 3", "position": 7}, {"id": "ULT_008", "category": "Ultimate", "title": "Ultimate Black Panther Vol 3", "position": 8}, {"id": "ULT_009", "category": "Ultimate", "title": "Ultimate X-Men Vol 3", "position": 9}, {"id": "ULT_010", "category": "Ultimate", "title": "Ultimate Incursion", "position": 10}, {"id": "ULT_011", "category": "Ultimate", "title": "Ultimates Vol 3", "position": 11}, {"id": "ULT_012", "category": "Ultimate", "title": "Ultimate Wolverine Vol 2", "position": 12}, {"id": "ULT_013", "category": "Ultimate", "title": "Ultimate Spider-Man Vol 4", "position": 13}, {"id": "ULT_014", "category": "Ultimate", "title": "Ultimate Black Panther Vol 4", "position": 14}, {"id": "ULT_015", "category": "Ultimate", "title": "Ultimate X-Men Vol 4", "position": 15}, {"id": "ULT_016", "category": "Ultimate", "title": "Ultimates Vol 4", "position": 16}, {"id": "ULT_017", "category": "Ultimate", "title": "Ultimate Wolverine Vol 3", "position": 17}, {"id": "ULT_018", "category": "Ultimate", "title": "Ultimate Endgame", "position": 18}, {"id": "DC_000", "category": "DC", "title": "Batman Superheavy", "position": 0}, {"id": "DC_001", "category": "DC", "title": "Batman Bloom", "position": 1}, {"id": "DC_002", "category": "DC", "title": "Batman Epilogue/Last Knight On Earth", "position": 2}, {"id": "DC_003", "category": "DC", "title": "Detective Comics Vol. 1: Faces of Death", "position": 3}, {"id": "DC_004", "category": "DC", "title": "Detective Comics Vol. 2: Scare Tactics", "position": 4}, {"id": "DC_005", "category": "DC", "title": "Detective Comics Vol. 3: Emperor Penguin", "position": 5}, {"id": "DC_006", "category": "DC", "title": "Detective Comics Vol. 4: The Wrath", "position": 6}, {"id": "DC_007", "category": "DC", "title": "Rest of Detective", "position": 7}, {"id": "DC_008", "category": "DC", "title": "Batman The Dark Knight Vol 1", "position": 8}, {"id": "DC_009", "category": "DC", "title": "Batman The Dark Knight Vol 2", "position": 9}, {"id": "DC_010", "category": "DC", "title": "Batman The Dark Knight Vol 3", "position": 10}, {"id": "DC_011", "category": "DC", "title": "Forever Evil", "position": 11}, {"id": "DC_012", "category": "DC", "title": "Arkham Manor", "position": 12}, {"id": "DC_013", "category": "DC", "title": "Batman Eternal Vol 1", "position": 13}, {"id": "DC_014", "category": "DC", "title": "Batman Eternal Vol 2", "position": 14}, {"id": "DC_015", "category": "DC", "title": "Batman Eternal Vol 3", "position": 15}, {"id": "DC_016", "category": "DC", "title": "Batman Eternal Vol 4", "position": 16}, {"id": "DC_017", "category": "DC", "title": "Batman and Robin Eternal Vol 1", "position": 17}, {"id": "DC_018", "category": "DC", "title": "Batman and Robin Eternal Vol 2", "position": 18}, {"id": "DC_019", "category": "DC", "title": "DC Universe Rebirth #1", "position": 19}, {"id": "DC_020", "category": "DC", "title": "Batman Vol. 1: I Am Gotham", "position": 20}, {"id": "DC_021", "category": "DC", "title": "Detective Comics Vol. 1: Rise of the Batmen", "position": 21}, {"id": "DC_022", "category": "DC", "title": "Batman: Night of the Monster Men", "position": 22}, {"id": "DC_023", "category": "DC", "title": "All-Star Batman Vol. 1: My Own Worst Enemy", "position": 23}, {"id": "DC_024", "category": "DC", "title": "Batman Vol. 2: I Am Suicide", "position": 24}, {"id": "DC_025", "category": "DC", "title": "Detective Comics Vol. 2: Victim Syndicate", "position": 25}, {"id": "DC_026", "category": "DC", "title": "Justice League vs. Suicide Squad", "position": 26}, {"id": "DC_027", "category": "DC", "title": "Batman Vol. 3: I Am Bane", "position": 27}, {"id": "DC_028", "category": "DC", "title": "Batman/The Flash: The Button", "position": 28}, {"id": "DC_029", "category": "DC", "title": "Detective Comics Vol. 3: League of Shadows", "position": 29}, {"id": "DC_030", "category": "DC", "title": "Batman Vol. 4: The War of Jokes and Riddles", "position": 30}, {"id": "DC_031", "category": "DC", "title": "Detective Comics Vol. 4: Deus Ex Machina", "position": 31}, {"id": "DC_032", "category": "DC", "title": "All-Star Batman Vol. 2-3", "position": 32}, {"id": "DC_033", "category": "DC", "title": "Detective Comics Vol. 5: A Lonely Place of Living", "position": 33}, {"id": "DC_034", "category": "DC", "title": "Batman Vol. 5: Rules of Engagement", "position": 34}, {"id": "DC_035", "category": "DC", "title": "Detective Comics Vol. 6: Fall of the Batmen", "position": 35}, {"id": "DC_036", "category": "DC", "title": "Batman Vol. 6: Bride or Burglar", "position": 36}, {"id": "DC_037", "category": "DC", "title": "Detective Comics Vol. 7: Batmen Eternal", "position": 37}, {"id": "DC_038", "category": "DC", "title": "Dark Nights: Metal", "position": 38}, {"id": "DC_039", "category": "DC", "title": "Batman & the Signal", "position": 39}, {"id": "DC_040", "category": "DC", "title": "Batman Vol. 7: The Wedding", "position": 40}, {"id": "DC_041", "category": "DC", "title": "Detective Comics Vol. 8: On the Outside", "position": 41}, {"id": "DC_042", "category": "DC", "title": "Batman Vol. 8: Cold Days", "position": 42}, {"id": "DC_043", "category": "DC", "title": "Detective Comics Vol. 9: Deface the Face", "position": 43}, {"id": "DC_044", "category": "DC", "title": "Batman Vol. 9: The Tyrant Wing", "position": 44}, {"id": "DC_045", "category": "DC", "title": "Batman Vol. 10: Knightmares", "position": 45}, {"id": "DC_046", "category": "DC", "title": "Heroes in Crisis", "position": 46}, {"id": "DC_047", "category": "DC", "title": "Batman/Flash: The Price", "position": 47}, {"id": "DC_048", "category": "DC", "title": "Detective Comics Vol. 1 (rebrand): Mythology", "position": 48}, {"id": "DC_049", "category": "DC", "title": "Detective Comics #1000: The Deluxe Edition", "position": 49}, {"id": "DC_050", "category": "DC", "title": "The Batman Who Laughs", "position": 50}, {"id": "DC_051", "category": "DC", "title": "Batman Vol. 11: The Fall and the Fallen", "position": 51}, {"id": "DC_052", "category": "DC", "title": "Batman Vol. 12: The City of Bane Part 1", "position": 52}, {"id": "DC_053", "category": "DC", "title": "Detective Comics Vol. 2: Arkham Knight", "position": 53}, {"id": "DC_054", "category": "DC", "title": "Batman: Universe", "position": 54}, {"id": "DC_055", "category": "DC", "title": "Detective Comics Vol. 3: Greetings from Gotham", "position": 55}, {"id": "DC_056", "category": "DC", "title": "Batman Vol. 13: The City of Bane Part 2", "position": 56}, {"id": "DC_057", "category": "DC", "title": "Detective Comics Vol. 4: Cold Vengeance", "position": 57}, {"id": "DC_058", "category": "DC", "title": "Doomsday Clock", "position": 58}, {"id": "DC_059", "category": "DC", "title": "Dark Nights: Death Metal", "position": 59}, {"id": "DC_060", "category": "DC", "title": "Batman/Catwoman", "position": 60}, {"id": "DC_061", "category": "DC", "title": "Batman Vol. 1: Their Dark Designs", "position": 61}, {"id": "DC_062", "category": "DC", "title": "Batman Vol. 2: The Joker War", "position": 62}, {"id": "DC_063", "category": "DC", "title": "Detective Comics Vol. 5: Joker War", "position": 63}, {"id": "DC_064", "category": "DC", "title": "Batman Vol. 3: Ghost Stories", "position": 64}, {"id": "DC_065", "category": "DC", "title": "Detective Comics Vol. 6: Road to Ruin", "position": 65}, {"id": "DC_066", "category": "DC", "title": "Fear State", "position": 66}, {"id": "DC_067", "category": "DC", "title": "Batman Vol. 5/6: Abyss", "position": 67}, {"id": "DC_068", "category": "DC", "title": "Batman: Shadow War (Event)", "position": 68}, {"id": "DC_069", "category": "DC", "title": "Dark Crisis On Infinite Earths", "position": 69}, {"id": "DC_070", "category": "DC", "title": "Batman: The Knight", "position": 70}, {"id": "DC_071", "category": "DC", "title": "Batman Vol. 1: Failsafe", "position": 71}, {"id": "DC_072", "category": "DC", "title": "Batman Vol. 2: The Bat-Man of Gotham", "position": 72}, {"id": "DC_073", "category": "DC", "title": "Batman/Catwoman: The Gotham War", "position": 73}, {"id": "DC_074", "category": "DC", "title": "Batman Vol. 3: The Joker – Year One", "position": 74}, {"id": "DC_075", "category": "DC", "title": "Absolute Power (Event)", "position": 75}, {"id": "DC_076", "category": "DC", "title": "Rest of Zdarsky", "position": 76}, {"id": "DC_077", "category": "DC", "title": "Lazarus Planet", "position": 77}, {"id": "DC_078", "category": "DC", "title": "Hush 2", "position": 78}, {"id": "DC_079", "category": "DC", "title": "Detective Comics Vol. 1: Gotham Nocturne – Overture", "position": 79}, {"id": "DC_080", "category": "DC", "title": "Detective Comics Vol. 2: Gotham Nocturne – Act I", "position": 80}, {"id": "DC_081", "category": "DC", "title": "Detective Comics Vol. 2: Gotham Nocturne – Act II", "position": 81}, {"id": "DC_082", "category": "DC", "title": "Detective Comics Vol. 4-6", "position": 82}, {"id": "DC_083", "category": "DC", "title": "Batman/Superman: World's Finest", "position": 83}, {"id": "DC_084", "category": "DC", "title": "Batman and Robin (Joshua Williamson)", "position": 84}, {"id": "DC_085", "category": "DC", "title": "Batman: The Brave and the Bold (Tom King)", "position": 85}, {"id": "DC_086", "category": "DC", "title": "DC All In Special", "position": 86}, {"id": "DC_087", "category": "DC", "title": "Fraction Batman", "position": 87}, {"id": "DC_088", "category": "DC", "title": "Tom Taylor Detective", "position": 88}, {"id": "DC_089", "category": "DC", "title": "Kennedy Johnson Batman and Robin", "position": 89}, {"id": "DC_090", "category": "DC", "title": "DC KO", "position": 90}, {"id": "DC_091", "category": "DC", "title": "Batman: White Knight", "position": 91}, {"id": "DC_092", "category": "DC", "title": "Batman: Damned", "position": 92}, {"id": "DC_093", "category": "DC", "title": "Batman: Three Jokers", "position": 93}, {"id": "DC_094", "category": "DC", "title": "The Flash Silver Age Omnibus Vol 1", "position": 94}, {"id": "DC_095", "category": "DC", "title": "The Flash Silver Age Omnibus Vol 2", "position": 95}, {"id": "DC_096", "category": "DC", "title": "The Flash Silver Age Omnibus Vol 3", "position": 96}, {"id": "DC_097", "category": "DC", "title": "DC Finest: The Flash — The Fastest Man Dead", "position": 97}, {"id": "DC_098", "category": "DC", "title": "The Flash: The Death of Iris West", "position": 98}, {"id": "DC_099", "category": "DC", "title": "Showcase Presents: The Trial of the Flash", "position": 99}, {"id": "DC_100", "category": "DC", "title": "Crisis on Infinite Earths", "position": 100}, {"id": "DC_101", "category": "DC", "title": "The Flash by William Messner-Loebs Vol. 1", "position": 101}, {"id": "DC_102", "category": "DC", "title": "Rest of Messner-Loebs", "position": 102}, {"id": "DC_103", "category": "DC", "title": "The Flash by Mark Waid Omnibus Vol. 1", "position": 103}, {"id": "DC_104", "category": "DC", "title": "Impulse 1 - 9", "position": 104}, {"id": "DC_105", "category": "DC", "title": "The Flash by Mark Waid Omnibus Vol. 2", "position": 105}, {"id": "DC_106", "category": "DC", "title": "Impulse 13 - 89", "position": 106}, {"id": "DC_107", "category": "DC", "title": "The Flash by Grant Morrison & Mark Millar", "position": 107}, {"id": "DC_108", "category": "DC", "title": "The Flash by Mark Waid Omnibus Vol. 3", "position": 108}, {"id": "DC_109", "category": "DC", "title": "The Flash by Geoff Johns Omnibus Vol. 1", "position": 109}, {"id": "DC_110", "category": "DC", "title": "The Flash by Geoff Johns Omnibus Vol. 2", "position": 110}, {"id": "DC_111", "category": "DC", "title": "Infinite Crisis", "position": 111}, {"id": "DC_112", "category": "DC", "title": "The Flash: The Fastest Man Alive — Lightning in a Bottle", "position": 112}, {"id": "DC_113", "category": "DC", "title": "The Flash: The Fastest Man Alive — Full Throttle", "position": 113}, {"id": "DC_114", "category": "DC", "title": "The Flash: The Wild Wests", "position": 114}, {"id": "DC_115", "category": "DC", "title": "Final Crisis", "position": 115}, {"id": "DC_116", "category": "DC", "title": "The Flash by Geoff Johns Omnibus Vol. 3", "position": 116}, {"id": "DC_117", "category": "DC", "title": "The Flash: The Road to Flashpoint", "position": 117}, {"id": "DC_118", "category": "DC", "title": "Flashpoint", "position": 118}, {"id": "DC_119", "category": "DC", "title": "The Flash by Francis Manapul & Brian Buccellato Omnibus", "position": 119}, {"id": "DC_120", "category": "DC", "title": "The Flash: Road to Rebirth Omnibus", "position": 120}, {"id": "DC_121", "category": "DC", "title": "The Flash by Joshua Williamson Omnibus Vol. 1", "position": 121}, {"id": "DC_122", "category": "DC", "title": "The Flash by Joshua Williamson Omnibus Vol. 2", "position": 122}, {"id": "DC_123", "category": "DC", "title": "Heroes In Crisis", "position": 123}, {"id": "DC_124", "category": "DC", "title": "Flash Forward", "position": 124}, {"id": "DC_125", "category": "DC", "title": "The Flash by Joshua Williamson Omnibus Vol. 3", "position": 125}, {"id": "DC_126", "category": "DC", "title": "The Flash: Wally West Returns", "position": 126}, {"id": "DC_127", "category": "DC", "title": "The Flash: Eclipsed", "position": 127}, {"id": "DC_128", "category": "DC", "title": "The Flash: The Search for Barry Allen", "position": 128}, {"id": "DC_129", "category": "DC", "title": "War for Earth-3", "position": 129}, {"id": "DC_130", "category": "DC", "title": "The Flash: The One-Minute War", "position": 130}, {"id": "DC_131", "category": "DC", "title": "The Flash: Time Heist", "position": 131}, {"id": "DC_132", "category": "DC", "title": "The Flash Vol. 1: Strange Attractor", "position": 132}, {"id": "DC_133", "category": "DC", "title": "The Flash Vol. 2: Until Time Stands Still", "position": 133}, {"id": "DC_134", "category": "DC", "title": "The Flash Vol. 3: As Above", "position": 134}, {"id": "DC_135", "category": "DC", "title": "The Flash Vol. 4: Bad Moon Rising", "position": 135}, {"id": "DC_136", "category": "DC", "title": "DC KO The Flash", "position": 136}, {"id": "DC_137", "category": "DC", "title": "Ryan North", "position": 137}, {"id": "X-M_000", "category": "X-Men", "title": "Extraordinary X-Men Vol 1: X-Haven", "position": 0}, {"id": "X-M_001", "category": "X-Men", "title": "All-New X-Men: Inevitable Vol. 1: Ghost of the Cyclops", "position": 1}, {"id": "MAR_000", "category": "Marvel", "title": "Slott FF Vol 3", "position": 0}, {"id": "MAR_001", "category": "Marvel", "title": "Slott FF Vol 4", "position": 1}, {"id": "MAR_002", "category": "Marvel", "title": "Slott FF Reckoning War", "position": 2}, {"id": "MAR_003", "category": "Marvel", "title": "AMS Omnibus Vol 1", "position": 3}, {"id": "MAR_004", "category": "Marvel", "title": "Untold Tales", "position": 4}, {"id": "MAR_005", "category": "Marvel", "title": "AMS Omnibus Vol 2", "position": 5}, {"id": "MAR_006", "category": "Marvel", "title": "AMS Omnibus Vol 3", "position": 6}, {"id": "MAR_007", "category": "Marvel", "title": "AMS Omnibus Vol 4", "position": 7}, {"id": "MAR_008", "category": "Marvel", "title": "AMS Omnibus Vol 5", "position": 8}, {"id": "MAR_009", "category": "Marvel", "title": "AMS Omnibus Vol 6", "position": 9}, {"id": "MAR_010", "category": "Marvel", "title": "AMS Omnibus Vol 7", "position": 10}, {"id": "MAR_011", "category": "Marvel", "title": "Spectacular Vol 1", "position": 11}, {"id": "MAR_012", "category": "Marvel", "title": "Spec 62 - 89 (Bill Mantlo)", "position": 12}, {"id": "MAR_013", "category": "Marvel", "title": "Roger Stern", "position": 13}, {"id": "MAR_014", "category": "Marvel", "title": "Death of Jean DeWolff", "position": 14}, {"id": "MAR_015", "category": "Marvel", "title": "Black Costume Saga", "position": 15}, {"id": "MAR_016", "category": "Marvel", "title": "Web of Spider-Man Vol 1", "position": 16}, {"id": "MAR_017", "category": "Marvel", "title": "Web of Spider-Man Vol 2", "position": 17}, {"id": "MAR_018", "category": "Marvel", "title": "Michelinie & McFarlane", "position": 18}, {"id": "MAR_019", "category": "Marvel", "title": "McFarlane", "position": 19}, {"id": "MAR_020", "category": "Marvel", "title": "Michelinie & Larson", "position": 20}, {"id": "MAR_021", "category": "Marvel", "title": "Michelinie & Bagley Vol 1", "position": 21}, {"id": "MAR_022", "category": "Marvel", "title": "Michelinie & Bagley Vol 2", "position": 22}, {"id": "MAR_023", "category": "Marvel", "title": "Clone Saga Vol 1", "position": 23}, {"id": "MAR_024", "category": "Marvel", "title": "Clone Saga Vol 2", "position": 24}, {"id": "MAR_025", "category": "Marvel", "title": "Ben Reilly Vol 1", "position": 25}, {"id": "MAR_026", "category": "Marvel", "title": "Ben Reilly Vol 2", "position": 26}, {"id": "MAR_027", "category": "Marvel", "title": "John Byrne Reboot", "position": 27}, {"id": "MAR_028", "category": "Marvel", "title": "AMS by JMS Vol 1", "position": 28}, {"id": "MAR_029", "category": "Marvel", "title": "AMS by JMS Vol 2", "position": 29}, {"id": "MAR_030", "category": "Marvel", "title": "Brand New Day Vol 1", "position": 30}, {"id": "MAR_031", "category": "Marvel", "title": "Brand New Day Vol 2", "position": 31}, {"id": "MAR_032", "category": "Marvel", "title": "Brand New Day Vol 3", "position": 32}, {"id": "MAR_033", "category": "Marvel", "title": "Slott Big Time Era", "position": 33}, {"id": "MAR_034", "category": "Marvel", "title": "Superior Spider-Man", "position": 34}, {"id": "MAR_035", "category": "Marvel", "title": "Slott Worldwide Era", "position": 35}, {"id": "MAR_036", "category": "Marvel", "title": "Spider-Verse", "position": 36}, {"id": "MAR_037", "category": "Marvel", "title": "Nick Spencer Vol 1", "position": 37}, {"id": "MAR_038", "category": "Marvel", "title": "Nick Spencer Vol 2", "position": 38}, {"id": "MAR_039", "category": "Marvel", "title": "Finish Nick Spencer", "position": 39}, {"id": "MAR_040", "category": "Marvel", "title": "Zdarsky", "position": 40}, {"id": "MAR_041", "category": "Marvel", "title": "Zeb Wells", "position": 41}, {"id": "VER_000", "category": "Vertigo", "title": "Swamp Thing Vol 2", "position": 0}, {"id": "VER_001", "category": "Vertigo", "title": "Swamp Thing Vol 3", "position": 1}, {"id": "VER_002", "category": "Vertigo", "title": "Alan Moore", "position": 2}, {"id": "VER_003", "category": "Vertigo", "title": "Veitch Book 1: WIld Things", "position": 3}, {"id": "VER_004", "category": "Vertigo", "title": "Hellblazer Original Sins", "position": 4}, {"id": "VER_005", "category": "Vertigo", "title": "Sandman Preludes and Nocturnes", "position": 5}, {"id": "VER_006", "category": "Vertigo", "title": "Hellblazer The Devil You Know", "position": 6}, {"id": "VER_007", "category": "Vertigo", "title": "Veitch Book 2: Synchronicity", "position": 7}, {"id": "VER_008", "category": "Vertigo", "title": "Hellblazer The Fear Machine", "position": 8}, {"id": "VER_009", "category": "Vertigo", "title": "Sandman The Doll's House", "position": 9}, {"id": "VER_010", "category": "Vertigo", "title": "Neil Gaiman's Midnight Days", "position": 10}, {"id": "VER_011", "category": "Vertigo", "title": "Veitch Book 3: Time Upon a Once", "position": 11}, {"id": "VER_012", "category": "Vertigo", "title": "Hellblazer Family Man", "position": 12}, {"id": "VER_013", "category": "Vertigo", "title": "Swamp Thing 88 - 171", "position": 13}, {"id": "VER_014", "category": "Vertigo", "title": "Brian K Vaughan", "position": 14}, {"id": "VER_015", "category": "Vertigo", "title": "Andly Diggle/Will Pfeifer", "position": 15}, {"id": "VER_016", "category": "Vertigo", "title": "Joshua Dysart", "position": 16}, {"id": "VER_017", "category": "Vertigo", "title": "Scott Snyder", "position": 17}, {"id": "VER_018", "category": "Vertigo", "title": "Charles Soule", "position": 18}, {"id": "VER_019", "category": "Vertigo", "title": "Len Wein", "position": 19}, {"id": "VER_020", "category": "Vertigo", "title": "Ram V", "position": 20}, {"id": "VER_021", "category": "Vertigo", "title": "Hellblazer Omnibus Vol 1", "position": 21}, {"id": "VER_022", "category": "Vertigo", "title": "Hellblazer Omnibus Vol 2", "position": 22}, {"id": "VER_023", "category": "Vertigo", "title": "Garth Ennis", "position": 23}, {"id": "VER_024", "category": "Vertigo", "title": "Critical Mass", "position": 24}, {"id": "VER_025", "category": "Vertigo", "title": "In The Line of Fire", "position": 25}, {"id": "VER_026", "category": "Vertigo", "title": "Last Man Standing", "position": 26}, {"id": "VER_027", "category": "Vertigo", "title": "How To Play With Fire", "position": 27}, {"id": "VER_028", "category": "Vertigo", "title": "Haunted", "position": 28}, {"id": "VER_029", "category": "Vertigo", "title": "Good Intentions", "position": 29}, {"id": "VER_030", "category": "Vertigo", "title": "Highwater", "position": 30}, {"id": "VER_031", "category": "Vertigo", "title": "The Wild Card", "position": 31}, {"id": "VER_032", "category": "Vertigo", "title": "Out of Season", "position": 32}, {"id": "VER_033", "category": "Vertigo", "title": "The Gift", "position": 33}, {"id": "VER_034", "category": "Vertigo", "title": "Red Right Hand", "position": 34}, {"id": "VER_035", "category": "Vertigo", "title": "Systems of Control", "position": 35}, {"id": "VER_036", "category": "Vertigo", "title": "The Laughing Magician", "position": 36}, {"id": "VER_037", "category": "Vertigo", "title": "Regeneration", "position": 37}, {"id": "VER_038", "category": "Vertigo", "title": "No Future", "position": 38}, {"id": "VER_039", "category": "Vertigo", "title": "Sectioned", "position": 39}, {"id": "VER_040", "category": "Vertigo", "title": "Another Season", "position": 40}, {"id": "VER_041", "category": "Vertigo", "title": "The Curse of The Constantines", "position": 41}, {"id": "VER_042", "category": "Vertigo", "title": "Marks of Woe", "position": 42}, {"id": "VER_043", "category": "Vertigo", "title": "The Best Version of You", "position": 43}, {"id": "VER_044", "category": "Vertigo", "title": "Dead In America", "position": 44}, {"id": "IND_000", "category": "Indie", "title": "The Ghost Fleet", "position": 0}, {"id": "IND_001", "category": "Indie", "title": "Alabaster", "position": 1}, {"id": "IND_002", "category": "Indie", "title": "Extremity", "position": 2}, {"id": "IND_003", "category": "Indie", "title": "Murder Falcon", "position": 3}, {"id": "IND_004", "category": "Indie", "title": "WW Dead Earth", "position": 4}, {"id": "IND_005", "category": "Indie", "title": "Beta Ray Bill", "position": 5}, {"id": "IND_006", "category": "Indie", "title": "Do A Powerbomb", "position": 6}, {"id": "IND_007", "category": "Indie", "title": "Jurassic League", "position": 7}, {"id": "IND_008", "category": "Indie", "title": "Transformers", "position": 8}, {"id": "IND_009", "category": "Indie", "title": "The Moon Is Following Us", "position": 9}, {"id": "IND_010", "category": "Indie", "title": "Chainkata", "position": 10}, {"id": "JAC_000", "category": "Jack Kirby", "title": "Golden Age Captain America", "position": 0}, {"id": "JAC_001", "category": "Jack Kirby", "title": "Boy Commandos Vol 1", "position": 1}, {"id": "JAC_002", "category": "Jack Kirby", "title": "Boy Commandos Vol 2", "position": 2}, {"id": "JAC_003", "category": "Jack Kirby", "title": "Newsboy Legion (2 Volume HC Set)", "position": 3}, {"id": "JAC_004", "category": "Jack Kirby", "title": "Sandman (Bronze Age Omnibus)", "position": 4}, {"id": "JAC_005", "category": "Jack Kirby", "title": "Manhunter (Digital)", "position": 5}, {"id": "JAC_006", "category": "Jack Kirby", "title": "Crime", "position": 6}, {"id": "JAC_007", "category": "Jack Kirby", "title": "Romance (Not Reprinted)", "position": 7}, {"id": "JAC_008", "category": "Jack Kirby", "title": "Horror", "position": 8}, {"id": "JAC_009", "category": "Jack Kirby", "title": "Science Fiction", "position": 9}, {"id": "JAC_010", "category": "Jack Kirby", "title": "Mainline", "position": 10}, {"id": "JAC_011", "category": "Jack Kirby", "title": "Superheroes", "position": 11}, {"id": "JAC_012", "category": "Jack Kirby", "title": "Green Arrow", "position": 12}, {"id": "JAC_013", "category": "Jack Kirby", "title": "Challengers of The Unknown", "position": 13}, {"id": "JAC_014", "category": "Jack Kirby", "title": "Sky Masters", "position": 14}, {"id": "JAC_015", "category": "Jack Kirby", "title": "Anthology Monster Stories", "position": 15}, {"id": "JAC_016", "category": "Jack Kirby", "title": "Incredible Hulk", "position": 16}, {"id": "JAC_017", "category": "Jack Kirby", "title": "Iron Man (Kind oF)", "position": 17}, {"id": "JAC_018", "category": "Jack Kirby", "title": "Fantastic Four", "position": 18}, {"id": "JAC_019", "category": "Jack Kirby", "title": "Thor", "position": 19}, {"id": "JAC_020", "category": "Jack Kirby", "title": "Captain America", "position": 20}, {"id": "JAC_021", "category": "Jack Kirby", "title": "Avengers", "position": 21}, {"id": "JAC_022", "category": "Jack Kirby", "title": "X-Men", "position": 22}, {"id": "JAC_023", "category": "Jack Kirby", "title": "Silver Surfer 18", "position": 23}, {"id": "JAC_024", "category": "Jack Kirby", "title": "War and Romance Omnibus", "position": 24}, {"id": "JAC_025", "category": "Jack Kirby", "title": "Strange Tales / Nick Fury, Agent of S.H.I.E.L.D", "position": 25}, {"id": "JAC_026", "category": "Jack Kirby", "title": "Inhumans", "position": 26}, {"id": "JAC_027", "category": "Jack Kirby", "title": "Fourth World", "position": 27}, {"id": "JAC_028", "category": "Jack Kirby", "title": "Kamandi", "position": 28}, {"id": "JAC_029", "category": "Jack Kirby", "title": "The Demon", "position": 29}, {"id": "JAC_030", "category": "Jack Kirby", "title": "OMAC", "position": 30}, {"id": "JAC_031", "category": "Jack Kirby", "title": "Our Fighting Forces", "position": 31}, {"id": "JAC_032", "category": "Jack Kirby", "title": "Sandman", "position": 32}, {"id": "JAC_033", "category": "Jack Kirby", "title": "Spirit World", "position": 33}, {"id": "JAC_034", "category": "Jack Kirby", "title": "In The Days of The Mob", "position": 34}, {"id": "JAC_035", "category": "Jack Kirby", "title": "Captain America", "position": 35}, {"id": "JAC_036", "category": "Jack Kirby", "title": "2001", "position": 36}, {"id": "JAC_037", "category": "Jack Kirby", "title": "The Eternals", "position": 37}, {"id": "JAC_038", "category": "Jack Kirby", "title": "Black Panther", "position": 38}, {"id": "JAC_039", "category": "Jack Kirby", "title": "Machine Man", "position": 39}, {"id": "JAC_040", "category": "Jack Kirby", "title": "Devil Dinosaur", "position": 40}, {"id": "JAC_041", "category": "Jack Kirby", "title": "SIlver Surfer OGN", "position": 41}, {"id": "JAC_042", "category": "Jack Kirby", "title": "Silver Star", "position": 42}, {"id": "JAC_043", "category": "Jack Kirby", "title": "Captain Victory", "position": 43}, {"id": "JAC_044", "category": "Jack Kirby", "title": "Super Powers", "position": 44}, {"id": "GHO_000", "category": "Ghost Machine", "title": "The Blizzard Vol 1", "position": 0}, {"id": "GHO_001", "category": "Ghost Machine", "title": "Geiger Vol 2", "position": 1}, {"id": "GHO_002", "category": "Ghost Machine", "title": "Redcoat Vol 1", "position": 2}, {"id": "GHO_003", "category": "Ghost Machine", "title": "Geiger Vol 3", "position": 3}, {"id": "GHO_004", "category": "Ghost Machine", "title": "Redcoat Vol 2", "position": 4}, {"id": "GHO_005", "category": "Ghost Machine", "title": "Geiger Vol 4", "position": 5}, {"id": "GHO_006", "category": "Ghost Machine", "title": "Geiger Vol 5", "position": 6}, {"id": "GHO_007", "category": "Ghost Machine", "title": "Rook: Exodus Vol 1", "position": 7}, {"id": "GHO_008", "category": "Ghost Machine", "title": "Hornsby & Halo Vol 1", "position": 8}, {"id": "GHO_009", "category": "Ghost Machine", "title": "The Rocketfellers Vol 1", "position": 9}, {"id": "GHO_010", "category": "Ghost Machine", "title": "Hornsby & Halo Vol 2", "position": 10}, {"id": "GHO_011", "category": "Ghost Machine", "title": "The Rocketfellers Vol 2", "position": 11}, {"id": "GHO_012", "category": "Ghost Machine", "title": "Hornsby & Halo Vol 3", "position": 12}, {"id": "GHO_013", "category": "Ghost Machine", "title": "The Rocketfellers Vol 3", "position": 13}, {"id": "GHO_014", "category": "Ghost Machine", "title": "The Trillion Dollar Kid", "position": 14}, {"id": "GHO_015", "category": "Ghost Machine", "title": "Hyde Street Vol 1", "position": 15}, {"id": "GHO_016", "category": "Ghost Machine", "title": "Sisterhood", "position": 16}, {"id": "GHO_017", "category": "Ghost Machine", "title": "Hyde Street Vol 2", "position": 17}, {"id": "GHO_018", "category": "Ghost Machine", "title": "Ghost Machine Guidebook", "position": 18}, {"id": "MOV_000", "category": "Movie", "title": "Tenet", "position": 0}, {"id": "MOV_001", "category": "Movie", "title": "Oppenheimer", "position": 1}, {"id": "MOV_002", "category": "Movie", "title": "The Odyssey", "position": 2}, {"id": "MOV_003", "category": "Movie", "title": "Django Unchained", "position": 3}, {"id": "MOV_004", "category": "Movie", "title": "The Hateful Eight", "position": 4}, {"id": "MOV_005", "category": "Movie", "title": "Once Upon A Time In Hollywood", "position": 5}, {"id": "TV__000", "category": "TV Show", "title": "Star Trek Discovery — Season 1", "position": 0}, {"id": "TV__001", "category": "TV Show", "title": "Star Trek Discovery — Season 2", "position": 1}, {"id": "TV__002", "category": "TV Show", "title": "Star Trek Strange New Worlds — Season 1", "position": 2}, {"id": "TV__003", "category": "TV Show", "title": "Strange New Worlds — Season 2", "position": 3}, {"id": "TV__004", "category": "TV Show", "title": "Strange New Worlds — Season 3", "position": 4}, {"id": "TV__005", "category": "TV Show", "title": "Strange New Worlds — Season 4", "position": 5}, {"id": "TV__006", "category": "TV Show", "title": "Star Trek Discovery — Season 2", "position": 6}, {"id": "TV__007", "category": "TV Show", "title": "Star Trek Discovery — Season 3", "position": 7}, {"id": "TV__008", "category": "TV Show", "title": "Star Trek Discovery — Season 4", "position": 8}, {"id": "TV__009", "category": "TV Show", "title": "Twin Peaks", "position": 9}, {"id": "XMN_002_3309zw", "category": "X-Men", "title": "Uncanny X-Men: Superior Vol. 1: Survival of the Fittest", "position": 2}, {"id": "XMN_003_6sp20s", "category": "X-Men", "title": "X-Men: Worst X-Man Ever", "position": 3}, {"id": "XMN_004_vobcxz", "category": "X-Men", "title": "X-Men '92 Vol. 1: World is a Vampire", "position": 4}, {"id": "XMN_005_eazam6", "category": "X-Men", "title": "X-Men: Apocalypse Wars", "position": 5}, {"id": "XMN_006_aelgjb", "category": "X-Men", "title": "Civil War II: X-Men #1–#4", "position": 6}, {"id": "XMN_007_wju0wl", "category": "X-Men", "title": "Extraordinary X-Men Vol. 3: Kingdoms Fall", "position": 7}, {"id": "XMN_008_63zijw", "category": "X-Men", "title": "All-New X-Men: Inevitable Vol. 3: Hell Hath So Much Fury", "position": 8}, {"id": "XMN_009_1cq545", "category": "X-Men", "title": "Uncanny X-Men: Superior Vol. 3: Waking From the Dream", "position": 9}, {"id": "XMN_010_8gndqo", "category": "X-Men", "title": "Death of X", "position": 10}, {"id": "XMN_011_2eflhx", "category": "X-Men", "title": "Extraordinary X-Men Vol. 4: IvX", "position": 11}, {"id": "XMN_012_44sa3l", "category": "X-Men", "title": "All-New X-Men: Inevitable Vol. 4: IvX", "position": 12}, {"id": "XMN_013_w1qf0v", "category": "X-Men", "title": "Uncanny X-Men: Superior Vol. 4: IvX", "position": 13}, {"id": "XMN_014_4b9s8n", "category": "X-Men", "title": "X-Men Gold Vol. 1", "position": 14}, {"id": "XMN_015_mwovxe", "category": "X-Men", "title": "X-Men Blue Vol. 1", "position": 15}, {"id": "XMN_016_326eth", "category": "X-Men", "title": "All-New Wolverine Vol. 3: Enemy of the State II", "position": 16}, {"id": "XMN_017_31xa3t", "category": "X-Men", "title": "Wolverine: Old Man Logan Vol. 4", "position": 17}, {"id": "XMN_018_aafgk6", "category": "X-Men", "title": "Astonishing X-Men by Charles Soule Vol. 1", "position": 18}, {"id": "XMN_019_pmgttf", "category": "X-Men", "title": "Jean Grey Vol. 1", "position": 19}, {"id": "XMN_020_3u6h3n", "category": "X-Men", "title": "Iceman Vol. 1", "position": 20}, {"id": "XMN_021_45ta6o", "category": "X-Men", "title": "Generation X Vol. 1", "position": 21}, {"id": "XMN_022_pqatso", "category": "X-Men", "title": "Cable Vol. 1", "position": 22}, {"id": "XMN_023_y1zlqp", "category": "X-Men", "title": "Weapon X Vol. 1", "position": 23}, {"id": "XMN_024_genkgk", "category": "X-Men", "title": "X-Men Gold Vol. 2", "position": 24}, {"id": "XMN_025_gcu3xv", "category": "X-Men", "title": "X-Men Blue Vol. 2: Toil and Trouble", "position": 25}, {"id": "XMN_026_5pptnn", "category": "X-Men", "title": "Astonishing X-Men by Charles Soule Vol. 2", "position": 26}, {"id": "XMN_027_hn0hrl", "category": "X-Men", "title": "Jean Grey Vol. 2: Final Fight", "position": 27}, {"id": "XMN_028_mqsxpn", "category": "X-Men", "title": "Iceman Vol. 2: Absolute Zero", "position": 28}, {"id": "XMN_029_s52dks", "category": "X-Men", "title": "X-Men Gold Vol. 3: Mojo Worldwide", "position": 29}, {"id": "XMN_030_bs0pwa", "category": "X-Men", "title": "X-Men Blue Vol. 3: Cross-Time Capers", "position": 30}, {"id": "XMN_031_3n5soo", "category": "X-Men", "title": "All-New Wolverine Vol. 5: Orphans of X", "position": 31}, {"id": "XMN_032_gdjdce", "category": "X-Men", "title": "Wolverine: Old Man Logan Vol. 8", "position": 32}, {"id": "XMN_033_haha5b", "category": "X-Men", "title": "Wolverine: Old Man Logan Vol. 9", "position": 33}, {"id": "XMN_034_c4nzaa", "category": "X-Men", "title": "Cable Vol. 3", "position": 34}, {"id": "XMN_035_k3iqdv", "category": "X-Men", "title": "Weapon X Vol. 4", "position": 35}, {"id": "XMN_036_soauc9", "category": "X-Men", "title": "All-New Wolverine Vol. 6: Old Woman Laura", "position": 36}, {"id": "XMN_037_qwrnz6", "category": "X-Men", "title": "Phoenix Resurrection", "position": 37}, {"id": "XMN_038_spuop7", "category": "X-Men", "title": "X-Men Gold Vol. 4: The Negative Zone War", "position": 38}, {"id": "XMN_039_7sxda7", "category": "X-Men", "title": "X-Men Gold Vol. 5: Cruel and Unusual", "position": 39}, {"id": "XMN_040_kwxuil", "category": "X-Men", "title": "X-Men Blue Vol. 4: Cry Havok", "position": 40}, {"id": "XMN_041_hm57h1", "category": "X-Men", "title": "X-Men Red Vol. 1", "position": 41}, {"id": "XMN_042_j141mm", "category": "X-Men", "title": "X-Men Red Vol. 2: Waging Peace", "position": 42}, {"id": "XMN_043_y8r48e", "category": "X-Men", "title": "X-Men Gold Vol. 6: 'Til Death Do Us Part", "position": 43}, {"id": "XMN_044_eav7wq", "category": "X-Men", "title": "X-Men Gold Vol. 7: Godwar", "position": 44}, {"id": "XMN_045_sngn1h", "category": "X-Men", "title": "Weapon H Vol. 1", "position": 45}, {"id": "XMN_046_w2lt8z", "category": "X-Men", "title": "Weapon H Vol. 2: War For Weirdworld", "position": 46}, {"id": "XMN_047_b4ud1y", "category": "X-Men", "title": "Weapon X Vol. 5: Weapon X-Force", "position": 47}, {"id": "XMN_048_9ubo4m", "category": "X-Men", "title": "Iceman Vol. 3: Amazing Friends", "position": 48}, {"id": "XMN_049_kiusr6", "category": "X-Men", "title": "Wolverine: Old Man Logan Vol. 10: End of the World", "position": 49}, {"id": "XMN_050_b0ua5a", "category": "X-Men", "title": "Uncanny X-Men Vol. 1: Cyclops & Wolverine", "position": 50}, {"id": "XMN_051_vwtiqt", "category": "X-Men", "title": "Uncanny X-Men Vol. 2: Wolverine & Cyclops", "position": 51}, {"id": "XMN_052_yof58t", "category": "X-Men", "title": "X-Men: Grand Design (complete — Vols. 1–3)", "position": 52}, {"id": "XMN_053_94krsd", "category": "X-Men", "title": "House of X / Powers of X", "position": 53}, {"id": "XMN_054_o5o6jx", "category": "X-Men", "title": "X-Men Vol. 1 (Hickman)", "position": 54}, {"id": "XMN_055_icf4go", "category": "X-Men", "title": "Marauders Vol. 1", "position": 55}, {"id": "XMN_056_0n77i5", "category": "X-Men", "title": "Excalibur by Tini Howard Vol. 1", "position": 56}, {"id": "XMN_057_ce3qp9", "category": "X-Men", "title": "New Mutants Vol. 1 (Hickman/Brisson)", "position": 57}, {"id": "XMN_058_sdcl7w", "category": "X-Men", "title": "X-Force Vol. 1 (Percy)", "position": 58}, {"id": "XMN_059_oj2zs1", "category": "X-Men", "title": "Fallen Angels Vol. 1", "position": 59}, {"id": "XMN_060_hf28nj", "category": "X-Men", "title": "Giant-Size X-Men: Jean Grey and Emma Frost", "position": 60}, {"id": "XMN_061_ygj6c0", "category": "X-Men", "title": "Wolverine Vol. 1 (Percy)", "position": 61}, {"id": "XMN_062_7p84q3", "category": "X-Men", "title": "X-Men by Jonathan Hickman Omnibus / Dawn of X Omnibus Vol. 1", "position": 62}, {"id": "XMN_063_txt7bh", "category": "X-Men", "title": "S.W.O.R.D. Vol. 1 (Ewing)", "position": 63}, {"id": "XMN_064_4r6ljm", "category": "X-Men", "title": "X-Men by Gerry Duggan (various vols.)", "position": 64}, {"id": "XMN_065_whlf5s", "category": "X-Men", "title": "Immortal X-Men Vol. 1 (Gillen)", "position": 65}, {"id": "XMN_066_vwj433", "category": "X-Men", "title": "X-Men Red Vol. 1 (Ewing)", "position": 66}, {"id": "XMN_067_ptuzx6", "category": "X-Men", "title": "Legion of X Vol. 1", "position": 67}, {"id": "XMN_068_4ca7sw", "category": "X-Men", "title": "Knights of X Vol. 1", "position": 68}, {"id": "XMN_069_7zmunx", "category": "X-Men", "title": "Inferno (Hickman miniseries)", "position": 69}, {"id": "XMN_070_v42303", "category": "X-Men", "title": "X Lives of Wolverine / X Deaths of Wolverine", "position": 70}, {"id": "XMN_071_cdzb9k", "category": "X-Men", "title": "Immortal X-Men (continued)", "position": 71}, {"id": "XMN_072_oif3ke", "category": "X-Men", "title": "X-Men Red (continued, Ewing)", "position": 72}, {"id": "XMN_073_6lktjt", "category": "X-Men", "title": "X-Men by Gerry Duggan Vols. 1–4", "position": 73}, {"id": "XMN_074_qruaik", "category": "X-Men", "title": "Storm & the Brotherhood of Mutants", "position": 74}, {"id": "XMN_075_7lqx41", "category": "X-Men", "title": "Resurrection of Magneto", "position": 75}, {"id": "XMN_076_rbxhdn", "category": "X-Men", "title": "Rogue & Gambit: Power Play", "position": 76}, {"id": "XMN_077_cfoeju", "category": "X-Men", "title": "X-Men: Before the Fall – Heralds of Apocalypse", "position": 77}, {"id": "XMN_078_zzn6z7", "category": "X-Men", "title": "X-Men: Hellfire Gala – Fall of X", "position": 78}, {"id": "XMN_079_aft2qb", "category": "X-Men", "title": "Ms. Marvel: The New Mutant", "position": 79}, {"id": "XMN_080_croan3", "category": "X-Men", "title": "Dead X-Men", "position": 80}, {"id": "XMN_081_oem89k", "category": "X-Men", "title": "Cable Vol. 5", "position": 81}, {"id": "XMN_082_ek1a83", "category": "X-Men", "title": "X-Men: Forever", "position": 82}, {"id": "XMN_083_n4rmqc", "category": "X-Men", "title": "Fall of the House of X / Rise of the Powers of X", "position": 83}];
+
+let categories = [];
+let items = [];
+let confirmCallback = null;
+
+// ── Supabase ──────────────────────────────────────────────────────
+function setSyncDot(s) { const d=document.getElementById('sync-dot'); d.className='sync-dot'+(s?' '+s:''); }
+
+async function dbGet(type) {
+  const res = await fetch(`${API}?type=eq.${type}&select=*`, {headers:HEADERS});
+  if (!res.ok) return null;
+  const rows = await res.json();
+  return rows.length ? rows[0].data : null;
+}
+
+async function dbSet(type, data) {
+  setSyncDot('syncing');
+  try {
+    const check = await fetch(`${API}?type=eq.${type}&select=id`, {headers:HEADERS});
+    const rows = await check.json();
+    let res;
+    if (rows.length > 0) {
+      res = await fetch(`${API}?type=eq.${type}`, {
+        method:'PATCH', headers:{...HEADERS,'Prefer':'return=minimal'},
+        body:JSON.stringify({data, updated_at:new Date().toISOString()})
+      });
+    } else {
+      res = await fetch(API, {
+        method:'POST', headers:{...HEADERS,'Prefer':'return=minimal'},
+        body:JSON.stringify({id:Date.now(),type,data,updated_at:new Date().toISOString()})
+      });
+    }
+    if (res.ok) { setSyncDot('ok'); setTimeout(()=>setSyncDot(''),2000); }
+    else setSyncDot('error');
+  } catch(e) { setSyncDot('error'); }
+}
+
+async function loadAll() {
+  try {
+    const [c, it] = await Promise.all([dbGet('categories'), dbGet('items')]);
+    categories = c || DEFAULT_CATEGORIES;
+    items = it || DEFAULT_ITEMS;
+    if (!c) dbSet('categories', categories);
+    if (!it) dbSet('items', items);
+  } catch(e) { categories = DEFAULT_CATEGORIES; items = DEFAULT_ITEMS; }
+  document.getElementById('loading-screen').style.display = 'none';
+  document.getElementById('main-app').style.display = 'block';
+  renderAll();
+}
+
+async function save() {
+  await Promise.all([dbSet('categories', categories), dbSet('items', items)]);
+}
+
+// ── Confirm ───────────────────────────────────────────────────────
+function showConfirm(title, msg, cb) {
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-msg').textContent = msg;
+  confirmCallback = cb;
+  document.getElementById('confirm-overlay').style.display = 'flex';
+}
+function closeConfirm() { document.getElementById('confirm-overlay').style.display='none'; confirmCallback=null; }
+document.getElementById('confirm-ok').onclick = () => { if(confirmCallback) confirmCallback(); closeConfirm(); };
+
+// ── Queue ─────────────────────────────────────────────────────────
+function renderQueue() {
+  const grid = document.getElementById('queue-grid');
+  if (!categories.length) { grid.innerHTML='<div class="empty">No categories yet.</div>'; return; }
+  grid.innerHTML = categories.map(cat => {
+    const catItems = items.filter(i=>i.category===cat).sort((a,b)=>a.position-b.position);
+    const top = catItems[0];
+    const remaining = catItems.length;
+    if (!top) return `<div class="q-card"><div class="q-cat">${cat}</div><div class="q-body"><div class="q-title" style="color:#444">Empty</div></div></div>`;
+    return `<div class="q-card">
+      <div class="q-cat">${cat}</div>
+      <div class="q-body">
+        <div class="q-title">${top.title}</div>
+        <div class="q-count">${remaining} item${remaining!==1?'s':''} in queue</div>
+      </div>
+      <button class="btn-done" onclick="markDone('${top.id.replace(/'/g,"\\'")}','${cat.replace(/'/g,"\\'")}','${top.title.replace(/'/g,"\\'")}')">Done ✓</button>
+    </div>`;
+  }).join('');
+}
+
+function markDone(id, cat, title) {
+  showConfirm('Mark as done?', `"${title}" will be removed from ${cat} and the next item will move up.`, () => {
+    items = items.filter(i=>i.id!==id);
+    save(); renderAll();
+  });
+}
+
+// ── Admin ─────────────────────────────────────────────────────────
+function renderAdmin() {
+  // Category list
+  const catList = document.getElementById('cat-list');
+  catList.innerHTML = categories.map((cat,ci) => `
+    <div class="admin-item">
+      <span class="admin-title" style="font-weight:600;">${cat}</span>
+      <button class="admin-del" onclick="deleteCategory(${ci})" title="Delete category">✕</button>
+    </div>`).join('');
+
+  // Per-category item lists
+  const lists = document.getElementById('admin-lists');
+  lists.innerHTML = categories.map(cat => {
+    const catItems = items.filter(i=>i.category===cat).sort((a,b)=>a.position-b.position);
+    return `<div class="admin-section">
+      <h3>${cat} <span style="font-weight:400;color:#444">${catItems.length} items</span></h3>
+      <div id="list-${cat.replace(/[^a-zA-Z0-9]/g,'_')}">
+        ${catItems.map((item,idx) => `
+          <div class="admin-item">
+            <span class="admin-pos">${idx+1}</span>
+            <span class="admin-title">${item.title}</span>
+            <button class="admin-del" onclick="deleteItem('${item.id.replace(/'/g,"\\'")}')" title="Remove">✕</button>
+          </div>`).join('')}
+      </div>
+      <div class="add-item-row">
+        <input type="text" id="new-item-${cat.replace(/[^a-zA-Z0-9]/g,'_')}" placeholder="Title..." />
+        <select id="pos-${cat.replace(/[^a-zA-Z0-9]/g,'_')}">
+          <option value="end">Add to end</option>
+          ${catItems.map((_,i) => `<option value="${i}">After position ${i+1}</option>`).join('')}
+          <option value="-1">Add to top</option>
+        </select>
+        <button class="btn-add" onclick="addItem('${cat.replace(/'/g,"\\'")}')">Add</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function addCategory() {
+  const input = document.getElementById('new-cat-input');
+  const name = input.value.trim();
+  if (!name) return;
+  if (categories.includes(name)) { document.getElementById('cat-msg').textContent='Category already exists.'; return; }
+  categories.push(name);
+  input.value = '';
+  save(); renderAll();
+  document.getElementById('cat-msg').textContent = `"${name}" added.`;
+  setTimeout(()=>document.getElementById('cat-msg').textContent='', 2500);
+}
+
+function deleteCategory(ci) {
+  const cat = categories[ci];
+  showConfirm('Delete category?', `"${cat}" and all its items will be permanently removed.`, () => {
+    categories.splice(ci,1);
+    items = items.filter(i=>i.category!==cat);
+    save(); renderAll();
+  });
+}
+
+function addItem(cat) {
+  const safeId = cat.replace(/[^a-zA-Z0-9]/g,'_');
+  const titleInput = document.getElementById(`new-item-${safeId}`);
+  const posSelect = document.getElementById(`pos-${safeId}`);
+  const title = titleInput.value.trim();
+  if (!title) return;
+
+  const catItems = items.filter(i=>i.category===cat).sort((a,b)=>a.position-b.position);
+  const posVal = posSelect.value;
+
+  // Determine insert index
+  let insertAfter;
+  if (posVal === 'end') insertAfter = catItems.length - 1;
+  else if (posVal === '-1') insertAfter = -1;
+  else insertAfter = parseInt(posVal);
+
+  const newItem = { id: Date.now() + '_' + Math.random().toString(36).slice(2,6), category: cat, title, position: 0 };
+
+  // Rebuild positions
+  catItems.splice(insertAfter + 1, 0, newItem);
+  catItems.forEach((item,i) => item.position = i);
+
+  // Update items array
+  items = items.filter(i=>i.category!==cat).concat(catItems);
+
+  titleInput.value = '';
+  save(); renderAdmin();
+}
+
+function deleteItem(id) {
+  const item = items.find(i=>i.id===id);
+  if (!item) return;
+  showConfirm('Remove item?', `"${item.title}" will be removed from the list.`, () => {
+    items = items.filter(i=>i.id!==id);
+    // Renumber remaining
+    const catItems = items.filter(i=>i.category===item.category).sort((a,b)=>a.position-b.position);
+    catItems.forEach((it,idx)=>it.position=idx);
+    save(); renderAdmin();
+  });
+}
+
+function renderAll() { renderQueue(); renderAdmin(); }
+
+function switchTab(name) {
+  ['queue','admin'].forEach(n => {
+    document.getElementById('tab-'+n).classList.toggle('active', n===name);
+  });
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['queue','admin'][i]===name));
+}
+
+function checkPw() {
+  if (document.getElementById('login-pw').value === 'GutsGriffith69!') {
+    localStorage.setItem('bruh-auth','1');
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('loading-screen').style.display='flex';
+    loadAll();
+  } else {
+    document.getElementById('login-err').textContent='Incorrect password.';
+  }
+}
+
+function init() {
+  if (localStorage.getItem('bruh-auth')==='1') { loadAll(); }
+  else { document.getElementById('login-screen').style.display='flex'; document.getElementById('loading-screen').style.display='none'; }
+}
+
+init();
+</script>
+</body>
+</html>
