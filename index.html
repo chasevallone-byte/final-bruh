@@ -17,13 +17,12 @@
   .section { display: none; }
   .section.active { display: block; }
   /* Queue cards */
-  .queue-grid { display: flex; flex-direction: column; gap: 10px; }
-  .q-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 1rem 1.1rem; display: flex; align-items: center; gap: 12px; }
-  .q-cat { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #555; min-width: 80px; }
+  .queue-grid { display: flex; flex-direction: column; gap: 6px; }
+  .q-card { background: #1a1a1a; border: 1px solid #222; border-left: 3px solid #444; border-radius: 10px; padding: 9px 12px; display: flex; align-items: center; gap: 10px; }
+  .q-cat { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; flex-shrink: 0; width: 70px; }
   .q-body { flex: 1; min-width: 0; }
-  .q-title { font-size: 15px; font-weight: 600; color: #f0f0f0; line-height: 1.3; }
-  .q-count { font-size: 11px; color: #444; margin-top: 3px; }
-  .btn-done { font-size: 12px; background: transparent; border: 1px solid #2a2a2a; color: #666; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.15s; flex-shrink: 0; }
+  .q-title { font-size: 14px; font-weight: 600; color: #f0f0f0; line-height: 1.3; }
+  .btn-done { font-size: 11px; background: transparent; border: 1px solid #333; color: #555; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.15s; flex-shrink: 0; }
   .btn-done:hover { border-color: #27ae60; color: #2ecc71; }
   /* Confirm overlay */
   .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 1rem; }
@@ -102,11 +101,25 @@
 
   <div class="tabs">
     <button class="tab active" onclick="switchTab('queue')">Queue</button>
+    <button class="tab" onclick="switchTab('random')">Random</button>
     <button class="tab" onclick="switchTab('admin')">Admin</button>
   </div>
 
   <div id="tab-queue" class="section active">
     <div class="queue-grid" id="queue-grid"></div>
+  </div>
+
+  <div id="tab-random" class="section">
+    <div style="text-align:center;padding:2rem 1rem 1rem;">
+      <button onclick="pickRandom()" style="background:#f0f0f0;color:#0f0f0f;border:none;border-radius:10px;padding:14px 32px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;width:100%;">Pick two ↗</button>
+    </div>
+    <div id="random-results" style="display:none;padding:0 0 1rem;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#555;text-align:center;margin-bottom:12px;">Tonight's picks</div>
+      <div class="queue-grid" id="random-cards"></div>
+      <div style="text-align:center;margin-top:1rem;">
+        <button onclick="pickRandom()" style="background:transparent;border:1px solid #333;color:#888;border-radius:8px;padding:8px 20px;font-size:13px;cursor:pointer;font-family:inherit;">Pick again</button>
+      </div>
+    </div>
   </div>
 
   <div id="tab-admin" class="section">
@@ -196,19 +209,20 @@ function closeConfirm() { document.getElementById('confirm-overlay').style.displ
 document.getElementById('confirm-ok').onclick = () => { if(confirmCallback) confirmCallback(); closeConfirm(); };
 
 // ── Queue ─────────────────────────────────────────────────────────
+const CAT_COLORS = {"Book": "#a78bfa", "Ultimate": "#f87171", "DC": "#60a5fa", "X-Men": "#fbbf24", "Marvel": "#f97316", "Vertigo": "#34d399", "Indie": "#e879f9", "Jack Kirby": "#94a3b8", "Ghost Machine": "#2dd4bf", "Movie": "#fb923c", "TV Show": "#818cf8"};
+
 function renderQueue() {
   const grid = document.getElementById('queue-grid');
   if (!categories.length) { grid.innerHTML='<div class="empty">No categories yet.</div>'; return; }
   grid.innerHTML = categories.map(cat => {
     const catItems = items.filter(i=>i.category===cat).sort((a,b)=>a.position-b.position);
     const top = catItems[0];
-    const remaining = catItems.length;
-    if (!top) return `<div class="q-card"><div class="q-cat">${cat}</div><div class="q-body"><div class="q-title" style="color:#444">Empty</div></div></div>`;
-    return `<div class="q-card">
-      <div class="q-cat">${cat}</div>
+    const color = CAT_COLORS[cat] || '#555';
+    if (!top) return `<div class="q-card" style="border-left-color:${color};opacity:0.4"><div class="q-cat" style="color:${color}">${cat}</div><div class="q-body"><div class="q-title" style="color:#444">Empty</div></div></div>`;
+    return `<div class="q-card" style="border-left-color:${color}">
+      <div class="q-cat" style="color:${color}">${cat}</div>
       <div class="q-body">
         <div class="q-title">${top.title}</div>
-        <div class="q-count">${remaining} item${remaining!==1?'s':''} in queue</div>
       </div>
       <button class="btn-done" onclick="markDone('${top.id.replace(/'/g,"\\'")}','${cat.replace(/'/g,"\\'")}','${top.title.replace(/'/g,"\\'")}')">Done ✓</button>
     </div>`;
@@ -323,11 +337,38 @@ function deleteItem(id) {
 
 function renderAll() { renderQueue(); renderAdmin(); }
 
+function pickRandom() {
+  const tops = categories.map(cat => {
+    const catItems = items.filter(i=>i.category===cat).sort((a,b)=>a.position-b.position);
+    return catItems[0] ? {category:cat, title:catItems[0].title, id:catItems[0].id} : null;
+  }).filter(Boolean);
+
+  if (tops.length < 2) {
+    document.getElementById('random-results').style.display = 'block';
+    document.getElementById('random-cards').innerHTML = '<div class="empty">Not enough items in queue.</div>';
+    return;
+  }
+
+  // Pick 2 unique random items
+  const shuffled = tops.sort(() => Math.random() - 0.5);
+  const picks = shuffled.slice(0, 2);
+
+  document.getElementById('random-cards').innerHTML = picks.map(pick => {
+    const color = CAT_COLORS[pick.category] || '#555';
+    return `<div class="q-card" style="border-left-color:${color}">
+      <div class="q-cat" style="color:${color}">${pick.category}</div>
+      <div class="q-body"><div class="q-title">${pick.title}</div></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('random-results').style.display = 'block';
+}
+
 function switchTab(name) {
-  ['queue','admin'].forEach(n => {
+  ['queue','random','admin'].forEach(n => {
     document.getElementById('tab-'+n).classList.toggle('active', n===name);
   });
-  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['queue','admin'][i]===name));
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['queue','random','admin'][i]===name));
 }
 
 function checkPw() {
