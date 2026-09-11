@@ -51,6 +51,10 @@
   .admin-cat-row input { flex: 1; background: #1a1a1a; border: 1px solid #2e2e2e; border-radius: 8px; color: #f0f0f0; font-family: inherit; font-size: 13px; padding: 8px 10px; }
   .admin-cat-row input:focus { outline: none; border-color: #555; }
   .admin-msg { font-size: 12px; color: #2ecc71; margin-top: 6px; min-height: 16px; }
+  /* Random picker category toggles */
+  .cat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cat-chip { font-size: 12px; padding: 6px 12px; border-radius: 999px; border: 1px solid #2e2e2e; background: #1a1a1a; color: #666; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .cat-chip.active { background: #2a2a2a; color: #f0f0f0; border-color: #555; }
   /* Login */
   .login-screen { position: fixed; inset: 0; background: #0f0f0f; display: flex; align-items: center; justify-content: center; z-index: 99; padding: 1rem; }
   .login-box { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 14px; }
@@ -110,7 +114,11 @@
   </div>
 
   <div id="tab-random" class="section">
-    <div style="text-align:center;padding:2rem 1rem 1rem;">
+    <div style="padding:1.5rem 1rem 0;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#555;margin-bottom:8px;">Include categories</div>
+      <div class="cat-chips" id="random-cat-chips"></div>
+    </div>
+    <div style="text-align:center;padding:1.5rem 1rem 1rem;">
       <button onclick="pickRandom()" style="background:#f0f0f0;color:#0f0f0f;border:none;border-radius:10px;padding:14px 32px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;width:100%;">Pick two ↗</button>
     </div>
     <div id="random-results" style="display:none;padding:0 0 1rem;">
@@ -147,6 +155,7 @@ const DEFAULT_ITEMS = [{"id": "BOO_000", "category": "Book", "title": "The Butch
 
 let categories = [];
 let items = [];
+let randomSelected = [];
 let confirmCallback = null;
 
 // ── Supabase ──────────────────────────────────────────────────────
@@ -183,19 +192,21 @@ async function dbSet(type, data) {
 
 async function loadAll() {
   try {
-    const [c, it] = await Promise.all([dbGet('categories'), dbGet('items')]);
+    const [c, it, rc] = await Promise.all([dbGet('categories'), dbGet('items'), dbGet('randomCategories')]);
     categories = c || DEFAULT_CATEGORIES;
     items = it || DEFAULT_ITEMS;
+    randomSelected = rc ? rc.filter(cat=>categories.includes(cat)) : categories.slice();
     if (!c) dbSet('categories', categories);
     if (!it) dbSet('items', items);
-  } catch(e) { categories = DEFAULT_CATEGORIES; items = DEFAULT_ITEMS; }
+    if (!rc) dbSet('randomCategories', randomSelected);
+  } catch(e) { categories = DEFAULT_CATEGORIES; items = DEFAULT_ITEMS; randomSelected = DEFAULT_CATEGORIES.slice(); }
   document.getElementById('loading-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
   renderAll();
 }
 
 async function save() {
-  await Promise.all([dbSet('categories', categories), dbSet('items', items)]);
+  await Promise.all([dbSet('categories', categories), dbSet('items', items), dbSet('randomCategories', randomSelected)]);
 }
 
 // ── Confirm ───────────────────────────────────────────────────────
@@ -279,6 +290,7 @@ function addCategory() {
   if (!name) return;
   if (categories.includes(name)) { document.getElementById('cat-msg').textContent='Category already exists.'; return; }
   categories.push(name);
+  randomSelected.push(name);
   input.value = '';
   save(); renderAll();
   document.getElementById('cat-msg').textContent = `"${name}" added.`;
@@ -290,6 +302,7 @@ function deleteCategory(ci) {
   showConfirm('Delete category?', `"${cat}" and all its items will be permanently removed.`, () => {
     categories.splice(ci,1);
     items = items.filter(i=>i.category!==cat);
+    randomSelected = randomSelected.filter(c=>c!==cat);
     save(); renderAll();
   });
 }
@@ -335,17 +348,42 @@ function deleteItem(id) {
   });
 }
 
-function renderAll() { renderQueue(); renderAdmin(); }
+function renderAll() { renderQueue(); renderAdmin(); renderRandomChips(); }
+
+function renderRandomChips() {
+  const el = document.getElementById('random-cat-chips');
+  if (!el) return;
+  if (!categories.length) { el.innerHTML = '<div class="empty">No categories yet.</div>'; return; }
+  el.innerHTML = categories.map(cat => {
+    const active = randomSelected.includes(cat);
+    const safe = cat.replace(/'/g,"\\'");
+    return `<button type="button" class="cat-chip${active?' active':''}" onclick="toggleRandomCat('${safe}')">${cat}</button>`;
+  }).join('');
+}
+
+function toggleRandomCat(cat) {
+  if (randomSelected.includes(cat)) randomSelected = randomSelected.filter(c=>c!==cat);
+  else randomSelected.push(cat);
+  dbSet('randomCategories', randomSelected);
+  renderRandomChips();
+}
 
 function pickRandom() {
-  const tops = categories.map(cat => {
+  const activeCats = categories.filter(cat => randomSelected.includes(cat));
+  if (activeCats.length < 2) {
+    document.getElementById('random-results').style.display = 'block';
+    document.getElementById('random-cards').innerHTML = '<div class="empty">Select at least 2 categories.</div>';
+    return;
+  }
+
+  const tops = activeCats.map(cat => {
     const catItems = items.filter(i=>i.category===cat).sort((a,b)=>a.position-b.position);
     return catItems[0] ? {category:cat, title:catItems[0].title, id:catItems[0].id} : null;
   }).filter(Boolean);
 
   if (tops.length < 2) {
     document.getElementById('random-results').style.display = 'block';
-    document.getElementById('random-cards').innerHTML = '<div class="empty">Not enough items in queue.</div>';
+    document.getElementById('random-cards').innerHTML = '<div class="empty">Not enough items in selected categories.</div>';
     return;
   }
 
