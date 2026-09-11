@@ -423,37 +423,41 @@ function toggleRandomCat(cat) {
   renderRandomChips();
 }
 
+function shuffled(arr) { return arr.slice().sort(() => Math.random() - 0.5); }
+
 function pickRandom() {
   const activeCats = categories.filter(cat => randomSelected.includes(cat));
-  if (activeCats.length < 2) {
+  if (activeCats.length < 1) {
     document.getElementById('random-results').style.display = 'block';
-    document.getElementById('random-cards').innerHTML = '<div class="empty">Select at least 2 categories.</div>';
+    document.getElementById('random-cards').innerHTML = '<div class="empty">Select at least 1 category.</div>';
     return;
   }
 
-  const debt = isDebtActive();
-  let pool = activeCats;
-  if (debt) {
-    const secondaryCats = activeCats.filter(cat => (categoryTiers[cat]||'primary')==='secondary');
-    if (secondaryCats.length >= 2) pool = secondaryCats;
-    else if (secondaryCats.length === 1) pool = secondaryCats.concat(activeCats.filter(cat=>!secondaryCats.includes(cat)));
-    // else: no secondary categories available — fall back to the full pool
-  }
-
-  const tops = pool.map(cat => {
+  const catsWithTops = activeCats.map(cat => {
     const catItems = items.filter(i=>i.category===cat).sort((a,b)=>a.position-b.position);
-    return catItems[0] ? {category:cat, title:catItems[0].title, id:catItems[0].id} : null;
+    return catItems[0] ? {category:cat, title:catItems[0].title, id:catItems[0].id, tier:(categoryTiers[cat]||'primary')} : null;
   }).filter(Boolean);
 
-  if (tops.length < 2) {
+  if (!catsWithTops.length) {
     document.getElementById('random-results').style.display = 'block';
     document.getElementById('random-cards').innerHTML = '<div class="empty">Not enough items in selected categories.</div>';
     return;
   }
 
-  // Pick 2 unique random items
-  const shuffled = tops.sort(() => Math.random() - 0.5);
-  const picks = shuffled.slice(0, 2);
+  const debt = isDebtActive();
+  let picks;
+
+  if (debt) {
+    // Debt owed: lock both slots to secondary categories. If none are available, nothing to force.
+    const secondaryTops = catsWithTops.filter(t => t.tier === 'secondary');
+    const pool = secondaryTops.length ? secondaryTops : catsWithTops;
+    picks = shuffled(pool).slice(0, Math.min(2, pool.length));
+  } else {
+    // Normal mode: lock both slots to primary categories only. If none are available, nothing to focus on.
+    const primaryTops = catsWithTops.filter(t => t.tier === 'primary');
+    const pool = primaryTops.length ? primaryTops : catsWithTops;
+    picks = shuffled(pool).slice(0, Math.min(2, pool.length));
+  }
 
   document.getElementById('random-cards').innerHTML = picks.map(pick => {
     const color = CAT_COLORS[pick.category] || '#555';
