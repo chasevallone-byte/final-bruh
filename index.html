@@ -55,6 +55,11 @@
   .cat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .cat-chip { font-size: 12px; padding: 6px 12px; border-radius: 999px; border: 1px solid #2e2e2e; background: #1a1a1a; color: #666; cursor: pointer; font-family: inherit; transition: all 0.15s; }
   .cat-chip.active { background: #2a2a2a; color: #f0f0f0; border-color: #555; }
+  .tier-toggle { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 8px; border-radius: 6px; border: 1px solid #2e2e2e; background: #161616; color: #666; cursor: pointer; font-family: inherit; flex-shrink: 0; }
+  .tier-toggle.primary { color: #f0f0f0; border-color: #555; }
+  .tier-toggle.secondary { color: #60a5fa; border-color: #2c4468; }
+  .debt-status { font-size: 12px; color: #888; text-align: center; padding: 0 1rem 1rem; line-height: 1.5; }
+  .debt-status.active { color: #f5a623; }
   /* Login */
   .login-screen { position: fixed; inset: 0; background: #0f0f0f; display: flex; align-items: center; justify-content: center; z-index: 99; padding: 1rem; }
   .login-box { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 14px; }
@@ -118,7 +123,8 @@
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#555;margin-bottom:8px;">Include categories</div>
       <div class="cat-chips" id="random-cat-chips"></div>
     </div>
-    <div style="text-align:center;padding:1.5rem 1rem 1rem;">
+    <div class="debt-status" id="debt-status"></div>
+    <div style="text-align:center;padding:0 1rem 1rem;">
       <button onclick="pickRandom()" style="background:#f0f0f0;color:#0f0f0f;border:none;border-radius:10px;padding:14px 32px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;width:100%;">Pick two ↗</button>
     </div>
     <div id="random-results" style="display:none;padding:0 0 1rem;">
@@ -156,6 +162,8 @@ const DEFAULT_ITEMS = [{"id": "BOO_000", "category": "Book", "title": "The Butch
 let categories = [];
 let items = [];
 let randomSelected = [];
+let categoryTiers = {};
+let primaryStreaks = {};
 let confirmCallback = null;
 
 // ── Supabase ──────────────────────────────────────────────────────
@@ -192,21 +200,25 @@ async function dbSet(type, data) {
 
 async function loadAll() {
   try {
-    const [c, it, rc] = await Promise.all([dbGet('categories'), dbGet('items'), dbGet('randomCategories')]);
+    const [c, it, rc, ct, ps] = await Promise.all([dbGet('categories'), dbGet('items'), dbGet('randomCategories'), dbGet('categoryTiers'), dbGet('primaryStreaks')]);
     categories = c || DEFAULT_CATEGORIES;
     items = it || DEFAULT_ITEMS;
     randomSelected = rc ? rc.filter(cat=>categories.includes(cat)) : categories.slice();
+    categoryTiers = ct || {};
+    primaryStreaks = ps || {};
     if (!c) dbSet('categories', categories);
     if (!it) dbSet('items', items);
     if (!rc) dbSet('randomCategories', randomSelected);
-  } catch(e) { categories = DEFAULT_CATEGORIES; items = DEFAULT_ITEMS; randomSelected = DEFAULT_CATEGORIES.slice(); }
+    if (!ct) dbSet('categoryTiers', categoryTiers);
+    if (!ps) dbSet('primaryStreaks', primaryStreaks);
+  } catch(e) { categories = DEFAULT_CATEGORIES; items = DEFAULT_ITEMS; randomSelected = DEFAULT_CATEGORIES.slice(); categoryTiers = {}; primaryStreaks = {}; }
   document.getElementById('loading-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
   renderAll();
 }
 
 async function save() {
-  await Promise.all([dbSet('categories', categories), dbSet('items', items), dbSet('randomCategories', randomSelected)]);
+  await Promise.all([dbSet('categories', categories), dbSet('items', items), dbSet('randomCategories', randomSelected), dbSet('categoryTiers', categoryTiers), dbSet('primaryStreaks', primaryStreaks)]);
 }
 
 // ── Confirm ───────────────────────────────────────────────────────
@@ -221,6 +233,7 @@ document.getElementById('confirm-ok').onclick = () => { if(confirmCallback) conf
 
 // ── Queue ─────────────────────────────────────────────────────────
 const CAT_COLORS = {"Book": "#a78bfa", "Ultimate": "#f87171", "DC": "#60a5fa", "X-Men": "#fbbf24", "Marvel": "#f97316", "Vertigo": "#34d399", "Indie": "#e879f9", "Jack Kirby": "#94a3b8", "Ghost Machine": "#2dd4bf", "Movie": "#fb923c", "TV Show": "#818cf8"};
+const SECONDARY_THRESHOLD = 5;
 
 function renderQueue() {
   const grid = document.getElementById('queue-grid');
@@ -243,6 +256,13 @@ function renderQueue() {
 function markDone(id, cat, title) {
   showConfirm('Mark as done?', `"${title}" will be removed from ${cat} and the next item will move up.`, () => {
     items = items.filter(i=>i.id!==id);
+    const tier = categoryTiers[cat] || 'primary';
+    if (tier === 'secondary') {
+      // Paying off debt: reset any primary category currently at/above threshold
+      Object.keys(primaryStreaks).forEach(c => { if (primaryStreaks[c] >= SECONDARY_THRESHOLD) primaryStreaks[c] = 0; });
+    } else {
+      primaryStreaks[cat] = (primaryStreaks[cat] || 0) + 1;
+    }
     save(); renderAll();
   });
 }
@@ -251,11 +271,16 @@ function markDone(id, cat, title) {
 function renderAdmin() {
   // Category list
   const catList = document.getElementById('cat-list');
-  catList.innerHTML = categories.map((cat,ci) => `
+  catList.innerHTML = categories.map((cat,ci) => {
+    const tier = categoryTiers[cat] || 'primary';
+    const safe = cat.replace(/'/g,"\\'");
+    return `
     <div class="admin-item">
       <span class="admin-title" style="font-weight:600;">${cat}</span>
+      <button class="tier-toggle ${tier}" onclick="toggleTier('${safe}')" title="Toggle primary/secondary">${tier}</button>
       <button class="admin-del" onclick="deleteCategory(${ci})" title="Delete category">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   // Per-category item lists
   const lists = document.getElementById('admin-lists');
@@ -284,6 +309,13 @@ function renderAdmin() {
   }).join('');
 }
 
+function toggleTier(cat) {
+  const current = categoryTiers[cat] || 'primary';
+  categoryTiers[cat] = current === 'primary' ? 'secondary' : 'primary';
+  if (categoryTiers[cat] === 'secondary') delete primaryStreaks[cat];
+  save(); renderAll();
+}
+
 function addCategory() {
   const input = document.getElementById('new-cat-input');
   const name = input.value.trim();
@@ -303,6 +335,8 @@ function deleteCategory(ci) {
     categories.splice(ci,1);
     items = items.filter(i=>i.category!==cat);
     randomSelected = randomSelected.filter(c=>c!==cat);
+    delete categoryTiers[cat];
+    delete primaryStreaks[cat];
     save(); renderAll();
   });
 }
@@ -348,7 +382,28 @@ function deleteItem(id) {
   });
 }
 
-function renderAll() { renderQueue(); renderAdmin(); renderRandomChips(); }
+function renderAll() { renderQueue(); renderAdmin(); renderRandomChips(); renderDebtStatus(); }
+
+function isDebtActive() {
+  return Object.values(primaryStreaks).some(v => v >= SECONDARY_THRESHOLD);
+}
+
+function renderDebtStatus() {
+  const el = document.getElementById('debt-status');
+  if (!el) return;
+  if (isDebtActive()) {
+    el.textContent = 'Secondary suggestion due — finish one to get back to normal picking.';
+    el.classList.add('active');
+    return;
+  }
+  el.classList.remove('active');
+  const primaryCats = categories.filter(cat => (categoryTiers[cat]||'primary')==='primary');
+  const closest = primaryCats.reduce((max, cat) => {
+    const v = primaryStreaks[cat] || 0;
+    return v > max.v ? {cat, v} : max;
+  }, {cat:null, v:0});
+  el.textContent = closest.v > 0 ? `${closest.cat}: ${closest.v}/${SECONDARY_THRESHOLD} until a secondary is due` : '';
+}
 
 function renderRandomChips() {
   const el = document.getElementById('random-cat-chips');
@@ -376,7 +431,16 @@ function pickRandom() {
     return;
   }
 
-  const tops = activeCats.map(cat => {
+  const debt = isDebtActive();
+  let pool = activeCats;
+  if (debt) {
+    const secondaryCats = activeCats.filter(cat => (categoryTiers[cat]||'primary')==='secondary');
+    if (secondaryCats.length >= 2) pool = secondaryCats;
+    else if (secondaryCats.length === 1) pool = secondaryCats.concat(activeCats.filter(cat=>!secondaryCats.includes(cat)));
+    // else: no secondary categories available — fall back to the full pool
+  }
+
+  const tops = pool.map(cat => {
     const catItems = items.filter(i=>i.category===cat).sort((a,b)=>a.position-b.position);
     return catItems[0] ? {category:cat, title:catItems[0].title, id:catItems[0].id} : null;
   }).filter(Boolean);
