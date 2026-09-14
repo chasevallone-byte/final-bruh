@@ -58,6 +58,7 @@
   .tier-toggle { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 8px; border-radius: 6px; border: 1px solid #2e2e2e; background: #161616; color: #666; cursor: pointer; font-family: inherit; flex-shrink: 0; }
   .tier-toggle.primary { color: #f0f0f0; border-color: #555; }
   .tier-toggle.secondary { color: #60a5fa; border-color: #2c4468; }
+  .tier-toggle.wildcard { color: #fbbf24; border-color: #7c5a12; }
   .debt-status { font-size: 12px; color: #888; text-align: center; padding: 0 1rem 1rem; line-height: 1.5; }
   .debt-status.active { color: #f5a623; }
   /* Login */
@@ -164,6 +165,8 @@ let items = [];
 let randomSelected = [];
 let categoryTiers = {};
 let primaryStreaks = {};
+let wildcardLocked = {};
+const WILDCARD_ODDS = 1/8;
 let confirmCallback = null;
 
 // ── Supabase ──────────────────────────────────────────────────────
@@ -200,25 +203,27 @@ async function dbSet(type, data) {
 
 async function loadAll() {
   try {
-    const [c, it, rc, ct, ps] = await Promise.all([dbGet('categories'), dbGet('items'), dbGet('randomCategories'), dbGet('categoryTiers'), dbGet('primaryStreaks')]);
+    const [c, it, rc, ct, ps, wl] = await Promise.all([dbGet('categories'), dbGet('items'), dbGet('randomCategories'), dbGet('categoryTiers'), dbGet('primaryStreaks'), dbGet('wildcardLocked')]);
     categories = c || DEFAULT_CATEGORIES;
     items = it || DEFAULT_ITEMS;
     randomSelected = rc ? rc.filter(cat=>categories.includes(cat)) : categories.slice();
     categoryTiers = ct || {};
     primaryStreaks = ps || {};
+    wildcardLocked = wl || {};
     if (!c) dbSet('categories', categories);
     if (!it) dbSet('items', items);
     if (!rc) dbSet('randomCategories', randomSelected);
     if (!ct) dbSet('categoryTiers', categoryTiers);
     if (!ps) dbSet('primaryStreaks', primaryStreaks);
-  } catch(e) { categories = DEFAULT_CATEGORIES; items = DEFAULT_ITEMS; randomSelected = DEFAULT_CATEGORIES.slice(); categoryTiers = {}; primaryStreaks = {}; }
+    if (!wl) dbSet('wildcardLocked', wildcardLocked);
+  } catch(e) { categories = DEFAULT_CATEGORIES; items = DEFAULT_ITEMS; randomSelected = DEFAULT_CATEGORIES.slice(); categoryTiers = {}; primaryStreaks = {}; wildcardLocked = {}; }
   document.getElementById('loading-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
   renderAll();
 }
 
 async function save() {
-  await Promise.all([dbSet('categories', categories), dbSet('items', items), dbSet('randomCategories', randomSelected), dbSet('categoryTiers', categoryTiers), dbSet('primaryStreaks', primaryStreaks)]);
+  await Promise.all([dbSet('categories', categories), dbSet('items', items), dbSet('randomCategories', randomSelected), dbSet('categoryTiers', categoryTiers), dbSet('primaryStreaks', primaryStreaks), dbSet('wildcardLocked', wildcardLocked)]);
 }
 
 // ── Confirm ───────────────────────────────────────────────────────
@@ -260,6 +265,10 @@ function markDone(id, cat, title) {
     if (tier === 'secondary') {
       // Paying off debt: reset any primary category currently at/above threshold
       Object.keys(primaryStreaks).forEach(c => { if (primaryStreaks[c] >= SECONDARY_THRESHOLD) primaryStreaks[c] = 0; });
+    } else if (tier === 'wildcard') {
+      // Wild Card sits outside the debt system entirely. Only clear the lock
+      // if the completed item is the one currently locked in - that re-arms the odds.
+      if (wildcardLocked[cat] === id) delete wildcardLocked[cat];
     } else {
       primaryStreaks[cat] = (primaryStreaks[cat] || 0) + 1;
     }
@@ -277,7 +286,7 @@ function renderAdmin() {
     return `
     <div class="admin-item">
       <span class="admin-title" style="font-weight:600;">${cat}</span>
-      <button class="tier-toggle ${tier}" onclick="toggleTier('${safe}')" title="Toggle primary/secondary">${tier}</button>
+      <button class="tier-toggle ${tier}" onclick="toggleTier('${safe}')" title="Cycle primary → secondary → wild card">${tier}</button>
       <button class="admin-del" onclick="deleteCategory(${ci})" title="Delete category">✕</button>
     </div>`;
   }).join('');
@@ -310,9 +319,12 @@ function renderAdmin() {
 }
 
 function toggleTier(cat) {
+  const order = ['primary','secondary','wildcard'];
   const current = categoryTiers[cat] || 'primary';
-  categoryTiers[cat] = current === 'primary' ? 'secondary' : 'primary';
-  if (categoryTiers[cat] === 'secondary') delete primaryStreaks[cat];
+  const next = order[(order.indexOf(current)+1) % order.length];
+  categoryTiers[cat] = next;
+  if (next !== 'primary') delete primaryStreaks[cat];
+  if (next !== 'wildcard') delete wildcardLocked[cat];
   save(); renderAll();
 }
 
@@ -337,6 +349,7 @@ function deleteCategory(ci) {
     randomSelected = randomSelected.filter(c=>c!==cat);
     delete categoryTiers[cat];
     delete primaryStreaks[cat];
+    delete wildcardLocked[cat];
     save(); renderAll();
   });
 }
@@ -425,6 +438,11 @@ function toggleRandomCat(cat) {
 
 function shuffled(arr) { return arr.slice().sort(() => Math.random() - 0.5); }
 
+function topOf(cat) {
+  const catItems = items.filter(i=>i.category===cat).sort((a,b)=>a.position-b.position);
+  return catItems[0] ? {category:cat, title:catItems[0].title, id:catItems[0].id} : null;
+}
+
 function pickRandom() {
   const activeCats = categories.filter(cat => randomSelected.includes(cat));
   if (activeCats.length < 1) {
@@ -433,30 +451,57 @@ function pickRandom() {
     return;
   }
 
-  const catsWithTops = activeCats.map(cat => {
-    const catItems = items.filter(i=>i.category===cat).sort((a,b)=>a.position-b.position);
-    return catItems[0] ? {category:cat, title:catItems[0].title, id:catItems[0].id, tier:(categoryTiers[cat]||'primary')} : null;
-  }).filter(Boolean);
-
-  if (!catsWithTops.length) {
-    document.getElementById('random-results').style.display = 'block';
-    document.getElementById('random-cards').innerHTML = '<div class="empty">Not enough items in selected categories.</div>';
-    return;
-  }
+  // Self-heal: if a locked Wild Card item no longer exists (deleted elsewhere), clear the lock.
+  Object.keys(wildcardLocked).forEach(cat => {
+    const id = wildcardLocked[cat];
+    if (!items.some(i => i.id === id && i.category === cat)) delete wildcardLocked[cat];
+  });
 
   const debt = isDebtActive();
   let picks;
+  let wildcardChanged = false;
 
   if (debt) {
-    // Debt owed: lock both slots to secondary categories. If none are available, nothing to force.
-    const secondaryTops = catsWithTops.filter(t => t.tier === 'secondary');
-    const pool = secondaryTops.length ? secondaryTops : catsWithTops;
+    // Debt owed: lock both slots to secondary categories. Wild Card is paused (state untouched) during debt.
+    const secondaryTops = activeCats.filter(cat => (categoryTiers[cat]||'primary')==='secondary').map(topOf).filter(Boolean);
+    const fallback = activeCats.map(topOf).filter(Boolean);
+    const pool = secondaryTops.length ? secondaryTops : fallback;
     picks = shuffled(pool).slice(0, Math.min(2, pool.length));
   } else {
-    // Normal mode: lock both slots to primary categories only. If none are available, nothing to focus on.
-    const primaryTops = catsWithTops.filter(t => t.tier === 'primary');
-    const pool = primaryTops.length ? primaryTops : catsWithTops;
-    picks = shuffled(pool).slice(0, Math.min(2, pool.length));
+    // Roll Wild Card activation for dormant, eligible Wild Card categories.
+    activeCats.forEach(cat => {
+      if ((categoryTiers[cat]||'primary') !== 'wildcard') return;
+      if (wildcardLocked[cat]) return; // already active - no re-roll until cleared
+      const catItems = items.filter(i => i.category === cat);
+      if (!catItems.length) return;
+      if (Math.random() < WILDCARD_ODDS) {
+        const chosen = catItems[Math.floor(Math.random() * catItems.length)];
+        wildcardLocked[cat] = chosen.id;
+        wildcardChanged = true;
+      }
+    });
+
+    // Normal mode pool: primary tops + any now-active Wild Card locked items, treated equally.
+    const primaryTops = activeCats.filter(cat => (categoryTiers[cat]||'primary')==='primary').map(topOf).filter(Boolean);
+    const wildcardTops = activeCats
+      .filter(cat => (categoryTiers[cat]||'primary')==='wildcard' && wildcardLocked[cat])
+      .map(cat => {
+        const it = items.find(i => i.id === wildcardLocked[cat] && i.category === cat);
+        return it ? {category: cat, title: it.title, id: it.id} : null;
+      }).filter(Boolean);
+
+    const pool = primaryTops.concat(wildcardTops);
+    const fallback = activeCats.map(topOf).filter(Boolean);
+    const finalPool = pool.length ? pool : fallback;
+    picks = shuffled(finalPool).slice(0, Math.min(2, finalPool.length));
+  }
+
+  if (wildcardChanged) save(); // persist a newly-activated lock even if nothing was marked done
+
+  if (!picks.length) {
+    document.getElementById('random-results').style.display = 'block';
+    document.getElementById('random-cards').innerHTML = '<div class="empty">Not enough items in selected categories.</div>';
+    return;
   }
 
   document.getElementById('random-cards').innerHTML = picks.map(pick => {
