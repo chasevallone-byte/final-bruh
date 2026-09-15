@@ -272,6 +272,26 @@ function markDone(id, cat, title) {
     } else {
       primaryStreaks[cat] = (primaryStreaks[cat] || 0) + 1;
     }
+
+    // Roll Wild Card activation once per completion (not once per "Pick two" click).
+    // Skip the category just acted on (avoids instantly re-rolling right after a Wild
+    // Card book was just cleared), and skip entirely while debt is active - Wild Card
+    // only plays in normal mode, same as before.
+    if (!isDebtActive()) {
+      categories.forEach(c => {
+        if (c === cat) return;
+        if (!randomSelected.includes(c)) return;
+        if ((categoryTiers[c]||'primary') !== 'wildcard') return;
+        if (wildcardLocked[c]) return;
+        const catItems = items.filter(i => i.category === c);
+        if (!catItems.length) return;
+        if (Math.random() < WILDCARD_ODDS) {
+          const chosen = catItems[Math.floor(Math.random() * catItems.length)];
+          wildcardLocked[c] = chosen.id;
+        }
+      });
+    }
+
     save(); renderAll();
   });
 }
@@ -459,7 +479,6 @@ function pickRandom() {
 
   const debt = isDebtActive();
   let picks;
-  let wildcardChanged = false;
 
   if (debt) {
     // Debt owed: lock both slots to secondary categories. Wild Card is paused (state untouched) during debt.
@@ -468,20 +487,8 @@ function pickRandom() {
     const pool = secondaryTops.length ? secondaryTops : fallback;
     picks = shuffled(pool).slice(0, Math.min(2, pool.length));
   } else {
-    // Roll Wild Card activation for dormant, eligible Wild Card categories.
-    activeCats.forEach(cat => {
-      if ((categoryTiers[cat]||'primary') !== 'wildcard') return;
-      if (wildcardLocked[cat]) return; // already active - no re-roll until cleared
-      const catItems = items.filter(i => i.category === cat);
-      if (!catItems.length) return;
-      if (Math.random() < WILDCARD_ODDS) {
-        const chosen = catItems[Math.floor(Math.random() * catItems.length)];
-        wildcardLocked[cat] = chosen.id;
-        wildcardChanged = true;
-      }
-    });
-
-    // Normal mode pool: primary tops + any now-active Wild Card locked items, treated equally.
+    // Normal mode pool: primary tops + any currently-active Wild Card locked items, treated equally.
+    // (Wild Card activation itself now happens on completion, in markDone - not here.)
     const primaryTops = activeCats.filter(cat => (categoryTiers[cat]||'primary')==='primary').map(topOf).filter(Boolean);
     const wildcardTops = activeCats
       .filter(cat => (categoryTiers[cat]||'primary')==='wildcard' && wildcardLocked[cat])
@@ -495,8 +502,6 @@ function pickRandom() {
     const finalPool = pool.length ? pool : fallback;
     picks = shuffled(finalPool).slice(0, Math.min(2, finalPool.length));
   }
-
-  if (wildcardChanged) save(); // persist a newly-activated lock even if nothing was marked done
 
   if (!picks.length) {
     document.getElementById('random-results').style.display = 'block';
