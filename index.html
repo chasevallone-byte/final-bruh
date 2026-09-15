@@ -116,6 +116,14 @@
   </div>
 
   <div id="tab-queue" class="section active">
+    <div style="padding:1rem 1rem 0;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#555;margin-bottom:8px;">Notes</div>
+      <div class="admin-cat-row">
+        <input type="text" id="note-input" placeholder="Jot something down..." onkeydown="if(event.key==='Enter')addNote()" />
+        <button class="btn-add" onclick="addNote()">Add</button>
+      </div>
+      <div id="notes-list"></div>
+    </div>
     <div class="queue-grid" id="queue-grid"></div>
   </div>
 
@@ -166,6 +174,7 @@ let randomSelected = [];
 let categoryTiers = {};
 let primaryStreaks = {};
 let wildcardLocked = {};
+let notes = [];
 const WILDCARD_ODDS = 1/8;
 let confirmCallback = null;
 
@@ -203,20 +212,22 @@ async function dbSet(type, data) {
 
 async function loadAll() {
   try {
-    const [c, it, rc, ct, ps, wl] = await Promise.all([dbGet('categories'), dbGet('items'), dbGet('randomCategories'), dbGet('categoryTiers'), dbGet('primaryStreaks'), dbGet('wildcardLocked')]);
+    const [c, it, rc, ct, ps, wl, n] = await Promise.all([dbGet('categories'), dbGet('items'), dbGet('randomCategories'), dbGet('categoryTiers'), dbGet('primaryStreaks'), dbGet('wildcardLocked'), dbGet('notes')]);
     categories = c || DEFAULT_CATEGORIES;
     items = it || DEFAULT_ITEMS;
     randomSelected = rc ? rc.filter(cat=>categories.includes(cat)) : categories.slice();
     categoryTiers = ct || {};
     primaryStreaks = ps || {};
     wildcardLocked = wl || {};
+    notes = n || [];
     if (!c) dbSet('categories', categories);
     if (!it) dbSet('items', items);
     if (!rc) dbSet('randomCategories', randomSelected);
     if (!ct) dbSet('categoryTiers', categoryTiers);
     if (!ps) dbSet('primaryStreaks', primaryStreaks);
     if (!wl) dbSet('wildcardLocked', wildcardLocked);
-  } catch(e) { categories = DEFAULT_CATEGORIES; items = DEFAULT_ITEMS; randomSelected = DEFAULT_CATEGORIES.slice(); categoryTiers = {}; primaryStreaks = {}; wildcardLocked = {}; }
+    if (!n) dbSet('notes', notes);
+  } catch(e) { categories = DEFAULT_CATEGORIES; items = DEFAULT_ITEMS; randomSelected = DEFAULT_CATEGORIES.slice(); categoryTiers = {}; primaryStreaks = {}; wildcardLocked = {}; notes = []; }
   document.getElementById('loading-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
   renderAll();
@@ -225,6 +236,8 @@ async function loadAll() {
 async function save() {
   await Promise.all([dbSet('categories', categories), dbSet('items', items), dbSet('randomCategories', randomSelected), dbSet('categoryTiers', categoryTiers), dbSet('primaryStreaks', primaryStreaks), dbSet('wildcardLocked', wildcardLocked)]);
 }
+
+async function saveNotes() { await dbSet('notes', notes); }
 
 // ── Confirm ───────────────────────────────────────────────────────
 function showConfirm(title, msg, cb) {
@@ -415,7 +428,32 @@ function deleteItem(id) {
   });
 }
 
-function renderAll() { renderQueue(); renderAdmin(); renderRandomChips(); renderDebtStatus(); }
+function renderAll() { renderQueue(); renderAdmin(); renderRandomChips(); renderDebtStatus(); renderNotes(); }
+
+function renderNotes() {
+  const el = document.getElementById('notes-list');
+  if (!el) return;
+  if (!notes.length) { el.innerHTML = ''; return; }
+  el.innerHTML = notes.map(n => `
+    <div class="admin-item">
+      <span class="admin-title">${n.text}</span>
+      <button class="admin-del" onclick="deleteNote(${n.id})" title="Delete note">✕</button>
+    </div>`).join('');
+}
+
+function addNote() {
+  const input = document.getElementById('note-input');
+  const text = input.value.trim();
+  if (!text) return;
+  notes.unshift({ id: Date.now(), text });
+  input.value = '';
+  saveNotes(); renderNotes();
+}
+
+function deleteNote(id) {
+  notes = notes.filter(n => n.id !== id);
+  saveNotes(); renderNotes();
+}
 
 function isDebtActive() {
   return Object.values(primaryStreaks).some(v => v >= SECONDARY_THRESHOLD);
