@@ -257,9 +257,21 @@ function renderQueue() {
   const grid = document.getElementById('queue-grid');
   if (!categories.length) { grid.innerHTML='<div class="empty">No categories yet.</div>'; return; }
   grid.innerHTML = categories.map(cat => {
-    const catItems = items.filter(i=>i.category===cat).sort((a,b)=>a.position-b.position);
-    const top = catItems[0];
+    const tier = categoryTiers[cat] || 'primary';
     const color = CAT_COLORS[cat] || '#555';
+    let top;
+    if (tier === 'wildcard') {
+      // Wild Card has no meaningful position order - "current" is whatever's locked
+      // in by the Random tab, not whatever happens to be first in the list.
+      const lockedId = wildcardLocked[cat];
+      top = lockedId ? items.find(i => i.id === lockedId && i.category === cat) : null;
+      if (!top) {
+        return `<div class="q-card" style="border-left-color:${color};opacity:0.4"><div class="q-cat" style="color:${color}">${cat}</div><div class="q-body"><div class="q-title" style="color:#444">Dormant - waiting on the odds</div></div></div>`;
+      }
+    } else {
+      const catItems = items.filter(i=>i.category===cat).sort((a,b)=>a.position-b.position);
+      top = catItems[0];
+    }
     if (!top) return `<div class="q-card" style="border-left-color:${color};opacity:0.4"><div class="q-cat" style="color:${color}">${cat}</div><div class="q-body"><div class="q-title" style="color:#444">Empty</div></div></div>`;
     return `<div class="q-card" style="border-left-color:${color}">
       <div class="q-cat" style="color:${color}">${cat}</div>
