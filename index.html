@@ -174,8 +174,10 @@ let randomSelected = [];
 let categoryTiers = {};
 let primaryStreaks = {};
 let wildcardLocked = {};
+let wildcardPity = {};
 let notes = [];
-const WILDCARD_ODDS = 1/8;
+const WILDCARD_ODDS = 1/5;
+const WILDCARD_PITY_CAP = 5;
 let confirmCallback = null;
 
 // ── Supabase ──────────────────────────────────────────────────────
@@ -212,7 +214,7 @@ async function dbSet(type, data) {
 
 async function loadAll() {
   try {
-    const [c, it, rc, ct, ps, wl, n] = await Promise.all([dbGet('categories'), dbGet('items'), dbGet('randomCategories'), dbGet('categoryTiers'), dbGet('primaryStreaks'), dbGet('wildcardLocked'), dbGet('notes')]);
+    const [c, it, rc, ct, ps, wl, n, wp] = await Promise.all([dbGet('categories'), dbGet('items'), dbGet('randomCategories'), dbGet('categoryTiers'), dbGet('primaryStreaks'), dbGet('wildcardLocked'), dbGet('notes'), dbGet('wildcardPity')]);
     categories = c || DEFAULT_CATEGORIES;
     items = it || DEFAULT_ITEMS;
     randomSelected = rc ? rc.filter(cat=>categories.includes(cat)) : categories.slice();
@@ -220,6 +222,7 @@ async function loadAll() {
     primaryStreaks = ps || {};
     wildcardLocked = wl || {};
     notes = n || [];
+    wildcardPity = wp || {};
     if (!c) dbSet('categories', categories);
     if (!it) dbSet('items', items);
     if (!rc) dbSet('randomCategories', randomSelected);
@@ -227,14 +230,15 @@ async function loadAll() {
     if (!ps) dbSet('primaryStreaks', primaryStreaks);
     if (!wl) dbSet('wildcardLocked', wildcardLocked);
     if (!n) dbSet('notes', notes);
-  } catch(e) { categories = DEFAULT_CATEGORIES; items = DEFAULT_ITEMS; randomSelected = DEFAULT_CATEGORIES.slice(); categoryTiers = {}; primaryStreaks = {}; wildcardLocked = {}; notes = []; }
+    if (!wp) dbSet('wildcardPity', wildcardPity);
+  } catch(e) { categories = DEFAULT_CATEGORIES; items = DEFAULT_ITEMS; randomSelected = DEFAULT_CATEGORIES.slice(); categoryTiers = {}; primaryStreaks = {}; wildcardLocked = {}; notes = []; wildcardPity = {}; }
   document.getElementById('loading-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
   renderAll();
 }
 
 async function save() {
-  await Promise.all([dbSet('categories', categories), dbSet('items', items), dbSet('randomCategories', randomSelected), dbSet('categoryTiers', categoryTiers), dbSet('primaryStreaks', primaryStreaks), dbSet('wildcardLocked', wildcardLocked)]);
+  await Promise.all([dbSet('categories', categories), dbSet('items', items), dbSet('randomCategories', randomSelected), dbSet('categoryTiers', categoryTiers), dbSet('primaryStreaks', primaryStreaks), dbSet('wildcardLocked', wildcardLocked), dbSet('wildcardPity', wildcardPity)]);
 }
 
 async function saveNotes() { await dbSet('notes', notes); }
@@ -310,9 +314,17 @@ function markDone(id, cat, title) {
         if (wildcardLocked[c]) return;
         const catItems = items.filter(i => i.category === c);
         if (!catItems.length) return;
-        if (Math.random() < WILDCARD_ODDS) {
+        // This completion was eligible to roll, so it counts toward the pity cap -
+        // guarantees an activation within WILDCARD_PITY_CAP eligible completions,
+        // even on a run of bad luck with the dice.
+        const pity = (wildcardPity[c] || 0) + 1;
+        const forced = pity >= WILDCARD_PITY_CAP;
+        if (forced || Math.random() < WILDCARD_ODDS) {
           const chosen = catItems[Math.floor(Math.random() * catItems.length)];
           wildcardLocked[c] = chosen.id;
+          wildcardPity[c] = 0;
+        } else {
+          wildcardPity[c] = pity;
         }
       });
     }
@@ -369,7 +381,7 @@ function toggleTier(cat) {
   const next = order[(order.indexOf(current)+1) % order.length];
   categoryTiers[cat] = next;
   if (next !== 'primary') delete primaryStreaks[cat];
-  if (next !== 'wildcard') delete wildcardLocked[cat];
+  if (next !== 'wildcard') { delete wildcardLocked[cat]; delete wildcardPity[cat]; }
   save(); renderAll();
 }
 
@@ -395,6 +407,7 @@ function deleteCategory(ci) {
     delete categoryTiers[cat];
     delete primaryStreaks[cat];
     delete wildcardLocked[cat];
+    delete wildcardPity[cat];
     save(); renderAll();
   });
 }
