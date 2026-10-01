@@ -24,6 +24,8 @@
   .q-title { font-size: 14px; font-weight: 600; color: #f0f0f0; line-height: 1.3; }
   .btn-done { font-size: 11px; background: transparent; border: 1px solid #333; color: #555; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.15s; flex-shrink: 0; }
   .btn-done:hover { border-color: #27ae60; color: #2ecc71; }
+  .btn-force { font-size: 11px; background: transparent; border: 1px solid #3d3321; color: #a3883f; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.15s; flex-shrink: 0; }
+  .btn-force:hover { border-color: #fbbf24; color: #fbbf24; }
   /* Confirm overlay */
   .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 1rem; }
   .confirm-box { background: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 14px; padding: 1.5rem; max-width: 320px; width: 100%; }
@@ -270,7 +272,16 @@ function renderQueue() {
       const lockedId = wildcardLocked[cat];
       top = lockedId ? items.find(i => i.id === lockedId && i.category === cat) : null;
       if (!top) {
-        return `<div class="q-card" style="border-left-color:${color};opacity:0.4"><div class="q-cat" style="color:${color}">${cat}</div><div class="q-body"><div class="q-title" style="color:#444">Dormant - waiting on the odds</div></div></div>`;
+        const catItems = items.filter(i => i.category === cat);
+        if (!catItems.length) {
+          return `<div class="q-card" style="border-left-color:${color};opacity:0.4"><div class="q-cat" style="color:${color}">${cat}</div><div class="q-body"><div class="q-title" style="color:#444">No wildcard books yet</div></div></div>`;
+        }
+        const safe = cat.replace(/'/g,"\\'");
+        return `<div class="q-card" style="border-left-color:${color}">
+          <div class="q-cat" style="color:${color}">${cat}</div>
+          <div class="q-body"><div class="q-title" style="color:#776a54;font-size:14px;">Dormant — waiting on the odds</div></div>
+          <button class="btn-force" onclick="forceWildcard('${safe}')" title="Immediately activate a random pick, bypassing the dice and pity timer">Force</button>
+        </div>`;
       }
     } else {
       const catItems = items.filter(i=>i.category===cat).sort((a,b)=>a.position-b.position);
@@ -287,8 +298,19 @@ function renderQueue() {
   }).join('');
 }
 
+function forceWildcard(cat) {
+  if (wildcardLocked[cat]) return; // already active, nothing to force
+  const catItems = items.filter(i => i.category === cat);
+  if (!catItems.length) return;
+  const chosen = catItems[Math.floor(Math.random() * catItems.length)];
+  wildcardLocked[cat] = chosen.id;
+  wildcardPity[cat] = 0;
+  save(); renderAll();
+}
+
 function markDone(id, cat, title) {
   showConfirm('Mark as done?', `"${title}" will be removed from ${cat} and the next item will move up.`, () => {
+    const preDebtActive = isDebtActive();
     items = items.filter(i=>i.id!==id);
     const tier = categoryTiers[cat] || 'primary';
     if (tier === 'secondary') {
@@ -301,12 +323,14 @@ function markDone(id, cat, title) {
     } else {
       primaryStreaks[cat] = (primaryStreaks[cat] || 0) + 1;
     }
+    const postDebtActive = isDebtActive();
 
     // Roll Wild Card activation once per completion (not once per "Pick two" click).
     // Skip the category just acted on (avoids instantly re-rolling right after a Wild
-    // Card book was just cleared), and skip entirely while debt is active - Wild Card
-    // only plays in normal mode, same as before.
-    if (!isDebtActive()) {
+    // Card book was just cleared). Skip only when debt was active BOTH before and
+    // after this completion (i.e. nothing changed - still fully debt-locked); this
+    // still lets the completion that triggers debt roll, and the one that clears it.
+    if (!(preDebtActive && postDebtActive)) {
       categories.forEach(c => {
         if (c === cat) return;
         if (!randomSelected.includes(c)) return;
@@ -546,7 +570,10 @@ function pickRandom() {
   if (debt) {
     // Debt owed: lock both slots to secondary categories. Wild Card is paused (state untouched) during debt.
     const secondaryTops = activeCats.filter(cat => (categoryTiers[cat]||'primary')==='secondary').map(topOf).filter(Boolean);
-    const fallback = activeCats.map(topOf).filter(Boolean);
+    // Fallback only applies when no secondary categories exist at all - still exclude
+    // Wild Card here, since it must never surface during debt regardless of fallback,
+    // and topOf() doesn't know about its locked-item semantics anyway.
+    const fallback = activeCats.filter(cat => (categoryTiers[cat]||'primary')!=='wildcard').map(topOf).filter(Boolean);
     const pool = secondaryTops.length ? secondaryTops : fallback;
     picks = shuffled(pool).slice(0, Math.min(2, pool.length));
   } else {
